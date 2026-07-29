@@ -1,0 +1,17 @@
+# Native dialog shown when a player clicks the bounty browser search button.
+# Valid placeholders: {current}.
+# Falls back to the chat search prompt on Spigot, older Paper, or when native-dialogs.enabled is false.
+
+title: "{theme}Search Bounties"
+body:
+  - "{muted}Enter a player name to filter active bounties."
+  - "{muted}Use the cancel button to return without changing the search."
+field-label: "{white}Player name"
+initial-value: "{current}"
+confirm-button: "{good}Search"
+cancel-button: "{bad}Cancel"
+
+body-width: 300
+input-width: 300
+button-width: 100
+max-length: 32

@@ -1,0 +1,27 @@
+name: FoBounty
+description: Highly configurable bounty system with GUI, history, and admin editor.
+version: '${version}'
+
+main: me.foesio.foBounty.FoBounty
+api-version: '1.21'
+
+authors: [ Carrotio ]
+softdepend: [ PlaceholderAPI, Vault, FoTeams ]
+
+commands:
+  fobounty:
+    aliases: [ bounty ]
+    permission: fobounty.use
+    usage: /<command> [add <player> <amount>|history <player>]
+  fobountyadmin:
+    aliases: [ bountyadmin ]
+    permission: fobounty.admin
+    usage: /<command> <editor|reload|version|remove> [player]
+
+permissions:
+  fobounty.use:
+    description: Use FoBounty player commands and GUI.
+    default: true
+  fobounty.admin:
+    description: Use FoBounty admin commands.
+    default: op

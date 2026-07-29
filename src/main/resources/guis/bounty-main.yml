@@ -1,0 +1,91 @@
+# Public bounty browser GUI.
+# Slots are 0-based. Inventory rows must be 1-6. Invalid slots/materials fall back safely.
+# Titles are rendered dark gray and small caps in code to match Fo GUI style.
+# Common item keys: slot, material, amount, name, lore, custom-model-data, glow, flags.
+# Valid main placeholders: {own_bounty}, {own_bounty_raw}, {total_earned}, {total_earned_raw}, {search}, {page}, {max_page}.
+
+title: "Bounty Browser"
+rows: 6
+
+# Dynamic active bounty entries render in these slots.
+content-slots:
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 19
+  - 20
+  - 21
+  - 22
+  - 23
+  - 24
+  - 25
+  - 28
+  - 29
+  - 30
+  - 31
+  - 32
+  - 33
+  - 34
+
+filler:
+  material: GRAY_STAINED_GLASS_PANE
+  name: " "
+
+empty-content:
+  material: LIGHT_GRAY_STAINED_GLASS_PANE
+  name: " "
+
+items:
+  info:
+    slot: 4
+    material: CLOCK
+    name: "{theme}Info"
+    lore:
+      - "{white}Use {theme}/bounty add <player> <amount>"
+      - "{white}Your bounty: {theme}${own_bounty}"
+      - "{white}Total earned: {theme}${total_earned}"
+  filter:
+    slot: 48
+    material: HOPPER
+    name: "{theme}Filter"
+    lore:
+      - "{filters}"
+    # Valid placeholder for these lines: {filter}.
+    selected-line: "{theme}• {filter}"
+    unselected-line: "{white}• {filter}"
+  refresh:
+    slot: 49
+    material: SKELETON_SKULL
+    name: "{theme}Refresh"
+    lore:
+      - "{white}Click to refresh this page"
+  search:
+    slot: 50
+  clear-search:
+    slot: 51
+  history:
+    slot: 47
+    material: WRITABLE_BOOK
+    name: "{theme}History"
+    lore:
+      - "{white}View bounty claim/loss history"
+  back:
+    slot: 45
+  next:
+    slot: 53
+
+# Dynamic bounty entry.
+# Valid placeholders: {player}, {target}, {amount}, {amount_raw}, {created_at}, {updated_at}, {contributions}.
+bounty-item:
+  material: PLAYER_HEAD
+  name: "{theme}{player}"
+  lore:
+    - "{white}Amount: {theme}${amount}"
+    - "{white}Set by:"
+    - "{contributions}"
+  # Valid contribution placeholders: {setter}, {amount}, {amount_raw}.
+  contribution-line: "{white}• {theme}{setter} {white}- {theme}${amount}"

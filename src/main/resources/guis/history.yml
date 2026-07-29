@@ -1,0 +1,72 @@
+# Public bounty history GUI.
+# Slots are 0-based. Inventory rows must be 1-6. Invalid slots/materials fall back safely.
+# Titles are rendered dark gray and small caps in code to match Fo GUI style.
+# Common item keys: slot, material, amount, name, lore, custom-model-data, glow, flags.
+
+title: "Bounty History"
+rows: 6
+
+# Dynamic history entries render in these slots.
+content-slots:
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 19
+  - 20
+  - 21
+  - 22
+  - 23
+  - 24
+  - 25
+  - 28
+  - 29
+  - 30
+  - 31
+  - 32
+  - 33
+  - 34
+  - 37
+  - 38
+  - 39
+  - 40
+  - 41
+  - 42
+  - 43
+
+filler:
+  material: GRAY_STAINED_GLASS_PANE
+  name: " "
+
+empty-content:
+  material: LIGHT_GRAY_STAINED_GLASS_PANE
+  name: " "
+
+items:
+  back:
+    slot: 45
+  next:
+    slot: 53
+  back-to-bounties:
+    slot: 49
+
+# Dynamic history entry items.
+# Valid placeholders: {type}, {player}, {related}, {target}, {amount}, {amount_raw}, {reason}, {time}.
+entries:
+  claimed:
+    material: EMERALD
+    name: "{theme}Claimed ${amount}"
+    lore:
+      - "{white}Time: {theme}{time}"
+      - "{white}Target: {theme}{related}"
+      - "{white}Reason: {theme}{reason}"
+  lost:
+    material: REDSTONE
+    name: "{theme}Lost ${amount}"
+    lore:
+      - "{white}Time: {theme}{time}"
+      - "{white}By: {theme}{related}"
+      - "{white}Reason: {theme}{reason}"

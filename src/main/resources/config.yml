@@ -1,0 +1,75 @@
+# Need help or want support? Join the Discord: https://discord.gg/kEF77QCfu7
+
+# FoBounty configuration.
+# Money values are whole economy units. Cooldowns use milliseconds unless noted.
+
+settings:
+  cooldowns:
+    # Per-player cooldown for command actions that can refresh or change bounty data.
+    command-ms: 100
+    # Per-player cooldown for placing or increasing a bounty. Protects sync economy/database writes.
+    bounty-add-ms: 1000
+    # Per-player cooldown for clicking the GUI refresh button.
+    gui-refresh-ms: 100
+    # Per-player cooldown for cycling the GUI bounty filter.
+    gui-filter-ms: 100
+    # Per-player cooldown for loading bounty history from SQLite.
+    history-request-ms: 250
+
+bounty:
+  # Lowest amount a player can place as a bounty.
+  min-price: 100
+  # Highest amount a player can place as a bounty.
+  max-price: 9999999999999
+  # If true, a player's active bounty is removed when they die without being killed by another player.
+  natural-death-loses-bounty: false
+
+announcements:
+  # Master toggle for public bounty claim announcements.
+  enabled: true
+  # Minimum claimed bounty amount required for a claim announcement. Use -1 to announce every claim.
+  minimum-announce-amount: -1
+  # Announces when a player places or adds to a bounty.
+  bounty-set-enabled: true
+  # Minimum added bounty amount required for a bounty-set announcement. Use -1 to announce every bounty set.
+  bounty-set-minimum-announce-amount: -1
+
+anti-abuse:
+  claim-block:
+    # Blocks bounty claims when killer and target share the same IP address.
+    same-ip: false
+    # Blocks bounty claims when killer and target are on the same /24 IPv4 subnet.
+    same-subnet: false
+    # Blocks bounty claims between members of the same FoTeams team when FoTeams is installed.
+    same-team-foteams: true
+
+discord-webhook:
+  # Enables Discord webhook notifications. The url must be a valid Discord webhook URL.
+  enabled: false
+  url: ""
+  # Optional webhook display name and avatar. Leave blank to use Discord's webhook defaults.
+  username: ""
+  avatar-url: ""
+  # Log the first failed webhook send until a later send succeeds.
+  log-failures: true
+  # Webhook request timeout in seconds.
+  timeout-seconds: 5
+  notify:
+    # Sends a webhook when a bounty is created or increased.
+    bounty-created: true
+    # Sends a webhook when an admin removes a bounty.
+    bounty-removed-by-admin: true
+    # Sends a webhook when a bounty is claimed.
+    bounty-claimed: true
+
+gui:
+  # Number of history entries shown on each GUI page. Maximum supported value is 28.
+  history-page-size: 28
+
+history:
+  # Maximum stored history entries per player. Older entries are pruned after new history is recorded.
+  cap: 28
+
+database:
+  # SQLite database file name inside the plugin data folder.
+  file: "bounties.db"
