@@ -2,6 +2,8 @@ package me.foesio.foBounty.command;
 
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.reload.FoReloadResult;
+import me.foesio.core.sound.FoAdminSounds;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.foBounty.gui.GuiManager;
 import me.foesio.foBounty.service.BountyService;
 import me.foesio.foBounty.service.DiscordWebhookService;
@@ -33,6 +35,8 @@ public final class BountyAdminCommand implements TabExecutor {
     private final GuiManager guiManager;
     private final Supplier<FoReloadResult> reloadCallback;
     private final Consumer<CommandSender> updateCheckCallback;
+    private final FoAdminSounds adminSounds;
+    private final FoSoundService sounds;
 
     public BountyAdminCommand(JavaPlugin plugin,
                               FoMessageService messages,
@@ -41,7 +45,9 @@ public final class BountyAdminCommand implements TabExecutor {
                               PlayerLookupService playerLookupService,
                               GuiManager guiManager,
                               Supplier<FoReloadResult> reloadCallback,
-                              Consumer<CommandSender> updateCheckCallback) {
+                              Consumer<CommandSender> updateCheckCallback,
+                              FoAdminSounds adminSounds,
+                              FoSoundService sounds) {
         this.plugin = plugin;
         this.messages = messages;
         this.bountyService = bountyService;
@@ -50,12 +56,15 @@ public final class BountyAdminCommand implements TabExecutor {
         this.guiManager = guiManager;
         this.reloadCallback = reloadCallback;
         this.updateCheckCallback = updateCheckCallback;
+        this.adminSounds = adminSounds;
+        this.sounds = sounds;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("fobounty.admin")) {
             messages.send(sender, "no-permission", "no-permission");
+            adminSounds.updateError(sender);
             return true;
         }
         if (args.length == 0) {
@@ -75,8 +84,14 @@ public final class BountyAdminCommand implements TabExecutor {
             case "reload" -> {
                 FoReloadResult result = reloadCallback.get();
                 if (result.successful()) {
+                    if (sender instanceof Player player) {
+                        adminSounds.reload(player);
+                    }
                     messages.send(sender, "reload-success", "reload-success");
                 } else {
+                    if (sender instanceof Player player) {
+                        adminSounds.reloadError(player);
+                    }
                     messages.send(sender, "reload-failed", "reload-failed", Map.of(
                             "step", result.failedStep(),
                             "error", result.errorMessage()
@@ -94,21 +109,30 @@ public final class BountyAdminCommand implements TabExecutor {
             case "remove" -> {
                 if (args.length < 2) {
                     messages.send(sender, "admin-remove-usage", "admin-remove-usage", Map.of("command", label));
+                    adminSounds.updateError(sender);
                     return true;
                 }
                 OfflinePlayer target = playerLookupService.findExact(args[1]);
                 if (target == null || target.getName() == null) {
                     messages.send(sender, "unknown-player", "unknown-player", Map.of("player", args[1]));
+                    playAdminError(sender);
                     return true;
                 }
                 BountyService.RemoveResult result = bountyService.removeBounty(target.getUniqueId());
                 switch (result.getStatus()) {
                     case REMOVED -> {
                         messages.send(sender, "admin-remove-success", "admin-remove-success", Map.of("player", target.getName()));
+                        playAdminRemove(sender);
                         discordWebhookService.sendBountyRemovedByAdmin(sender.getName(), target.getName(), result.getAmount());
                     }
-                    case NONE -> messages.send(sender, "admin-remove-none", "admin-remove-none", Map.of("player", target.getName()));
-                    case FAILURE -> messages.send(sender, "admin-remove-failed", "admin-remove-failed", Map.of("player", target.getName()));
+                    case NONE -> {
+                        messages.send(sender, "admin-remove-none", "admin-remove-none", Map.of("player", target.getName()));
+                        playAdminError(sender);
+                    }
+                    case FAILURE -> {
+                        messages.send(sender, "admin-remove-failed", "admin-remove-failed", Map.of("player", target.getName()));
+                        playAdminError(sender);
+                    }
                 }
                 return true;
             }
@@ -121,6 +145,17 @@ public final class BountyAdminCommand implements TabExecutor {
 
     private void sendUsage(CommandSender sender, String label) {
         messages.send(sender, "admin-usage", "admin-usage", Map.of("command", label));
+        adminSounds.updateError(sender);
+    }
+
+    private void playAdminRemove(CommandSender sender) {
+        if (sender instanceof Player player) {
+            sounds.play(player, "bounty.admin-remove");
+        }
+    }
+
+    private void playAdminError(CommandSender sender) {
+        adminSounds.updateError(sender);
     }
 
     @Override

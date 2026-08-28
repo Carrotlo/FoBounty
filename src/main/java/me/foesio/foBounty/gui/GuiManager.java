@@ -8,6 +8,8 @@ import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.scheduler.FoScheduler;
+import me.foesio.core.sound.FoEditorSounds;
+import me.foesio.core.sound.FoGuiSounds;
 import me.foesio.foBounty.config.GuiConfig;
 import me.foesio.foBounty.config.GuiConfig.GuiItem;
 import me.foesio.foBounty.config.GuiConfig.GuiButtonSlot;
@@ -70,6 +72,8 @@ public final class GuiManager {
     private final BountyService bountyService;
     private final CooldownService cooldownService;
     private final FoScheduler scheduler;
+    private final FoEditorSounds editorSounds;
+    private final FoGuiSounds guiSounds;
     private final GuiButtonConfig buttons = GuiButtonConfig.defaults();
     private DialogInputService dialogInputs;
     private final ConfiguredTextDialogs textDialogs;
@@ -90,7 +94,9 @@ public final class GuiManager {
                       DialogInputService dialogInputs,
                       ConfiguredTextDialogs textDialogs,
                       InventoryCloseSuppressor closeSuppressor,
-                      FoScheduler scheduler) {
+                      FoScheduler scheduler,
+                      FoEditorSounds editorSounds,
+                      FoGuiSounds guiSounds) {
         this.plugin = plugin;
         this.settings = settings;
         this.messages = messages;
@@ -98,6 +104,8 @@ public final class GuiManager {
         this.bountyService = bountyService;
         this.cooldownService = cooldownService;
         this.scheduler = scheduler;
+        this.editorSounds = editorSounds;
+        this.guiSounds = guiSounds;
         this.dialogInputs = dialogInputs;
         this.textDialogs = textDialogs;
         this.closeSuppressor = closeSuppressor;
@@ -115,14 +123,14 @@ public final class GuiManager {
 
     public void openMain(Player player) {
         BountyViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
-        openMain(player, state);
+        openMain(player, state, () -> guiSounds.open(player));
     }
 
     public void openMainWithSearch(Player player, String searchTarget) {
         BountyViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
         state.setSearchTarget(sanitizeSearchTarget(searchTarget));
         state.setPage(0);
-        openMain(player, state);
+        openMain(player, state, () -> guiSounds.search(player));
     }
 
     public void clearSearch(UUID viewerUuid) {
@@ -134,6 +142,10 @@ public final class GuiManager {
     }
 
     public void openAdminEditor(Player player) {
+        openAdminEditor(player, true);
+    }
+
+    private void openAdminEditor(Player player, boolean playOpenSound) {
         AdminEditorHolder holder = new AdminEditorHolder();
         String title = Style.colorize("&8" + Style.smallCaps(ADMIN_EDITOR_TITLE));
         Inventory inventory = Bukkit.createInventory(holder, INVENTORY_SIZE, title);
@@ -178,6 +190,9 @@ public final class GuiManager {
                 "&" + Style.WHITE_HEX + "Click to edit"
         )));
         player.openInventory(inventory);
+        if (playOpenSound) {
+            editorSounds.open(player);
+        }
     }
 
     public void beginSearch(Player player) {
@@ -187,18 +202,24 @@ public final class GuiManager {
         )));
         openTextInput(player, request,
                 input -> handleSearchInput(player, input),
-                () -> sendCancelled(player));
+                () -> {
+                    guiSounds.cancel(player);
+                    sendCancelled(player);
+                },
+                () -> guiSounds.open(player));
     }
 
     private void handleSearchInput(Player player, String input) {
         String searchTarget = sanitizeSearchTarget(input);
         if (searchTarget.equalsIgnoreCase("cancel")) {
+            guiSounds.cancel(player);
             sendCancelled(player);
             return;
         }
         if (searchTarget.isBlank()) {
             Map<String, String> replacements = Map.of("player", " ");
             messages.send(player, "search-no-match", "search-no-match", replacements);
+            guiSounds.error(player);
             return;
         }
         openMainWithSearch(player, searchTarget);
@@ -206,6 +227,7 @@ public final class GuiManager {
 
     private void handleAdminPrompt(Player player, AdminPromptType promptType, String input) {
         if (input.equalsIgnoreCase("cancel")) {
+            editorSounds.back(player);
             sendCancelled(player);
             reopenAdminEditor(player);
             return;
@@ -223,6 +245,8 @@ public final class GuiManager {
                 return;
             }
             long parsed = parsedValue;
+            String savedKey = promptKey(promptType);
+            String savedValue = String.valueOf(parsed);
             switch (promptType) {
                 case MIN_PRICE -> {
                     if (parsed <= 0 || parsed > settings.getMaxPrice()) {
@@ -231,7 +255,8 @@ public final class GuiManager {
                         return;
                     }
                     settings.setMinPrice(parsed);
-                    sendSavedEditor(player, "min-price", String.valueOf(settings.getMinPrice()));
+                    savedKey = "min-price";
+                    savedValue = String.valueOf(settings.getMinPrice());
                 }
                 case MAX_PRICE -> {
                     if (parsed < settings.getMinPrice() || parsed > PluginSettings.MAX_SAFE_MONEY) {
@@ -240,7 +265,8 @@ public final class GuiManager {
                         return;
                     }
                     settings.setMaxPrice(parsed);
-                    sendSavedEditor(player, "max-price", String.valueOf(settings.getMaxPrice()));
+                    savedKey = "max-price";
+                    savedValue = String.valueOf(settings.getMaxPrice());
                 }
                 case ANNOUNCE_THRESHOLD -> {
                     if (parsed > PluginSettings.MAX_SAFE_MONEY) {
@@ -249,7 +275,8 @@ public final class GuiManager {
                         return;
                     }
                     settings.setAnnounceMinimumAmount(parsed);
-                    sendSavedEditor(player, "announce-threshold", String.valueOf(settings.getAnnounceMinimumAmount()));
+                    savedKey = "announce-threshold";
+                    savedValue = String.valueOf(settings.getAnnounceMinimumAmount());
                 }
                 case HISTORY_CAP -> {
                     if (parsed < 1 || parsed > PluginSettings.MAX_HISTORY_CAP) {
@@ -258,10 +285,13 @@ public final class GuiManager {
                         return;
                     }
                     settings.setHistoryCap((int) parsed);
-                    sendSavedEditor(player, "history-cap", String.valueOf(parsed));
+                    savedKey = "history-cap";
+                    savedValue = String.valueOf(parsed);
                 }
             }
             settings.save(plugin);
+            sendSavedEditor(player, savedKey, savedValue);
+            editorSounds.save(player);
         } catch (NumberFormatException ignored) {
             sendInvalidEditor(player, promptKey(promptType));
         }
@@ -276,7 +306,7 @@ public final class GuiManager {
                 return;
             }
             state.setPage(Math.max(0, state.getPage() - 1));
-            openMain(player, state);
+            openMain(player, state, () -> guiSounds.previousPage(player));
             return;
         }
         if (slot == gui.next().slot()) {
@@ -284,12 +314,12 @@ public final class GuiManager {
                 return;
             }
             state.setPage(state.getPage() + 1);
-            openMain(player, state);
+            openMain(player, state, () -> guiSounds.nextPage(player));
             return;
         }
         if (slot == gui.refresh().slot()) {
             if (!cooldownService.isOnCooldown(player.getUniqueId(), "refresh", settings.getGuiRefreshCooldownMs())) {
-                openMain(player, state);
+                openMain(player, state, () -> guiSounds.click(player));
             }
             return;
         }
@@ -297,7 +327,7 @@ public final class GuiManager {
             if (!cooldownService.isOnCooldown(player.getUniqueId(), "filter", settings.getGuiFilterCooldownMs())) {
                 state.setFilter(state.getFilter().next());
                 state.setPage(0);
-                openMain(player, state);
+                openMain(player, state, () -> guiSounds.filter(player));
             }
             return;
         }
@@ -312,7 +342,7 @@ public final class GuiManager {
             if (state.getSearchTarget() != null && !state.getSearchTarget().isBlank()) {
                 state.setSearchTarget(null);
                 state.setPage(0);
-                openMain(player, state);
+                openMain(player, state, () -> guiSounds.clearSearch(player));
             }
             return;
         }
@@ -336,7 +366,7 @@ public final class GuiManager {
             UUID targetUuid = UUID.fromString(targetRaw);
             ActiveBounty bounty = findBountyByUuid(targetUuid);
             if (bounty != null) {
-                openHistory(player, targetUuid, bounty.getTargetName());
+                openHistory(player, targetUuid, bounty.getTargetName(), () -> guiSounds.select(player));
             }
         } catch (IllegalArgumentException ignored) {
             // ignored
@@ -350,23 +380,27 @@ public final class GuiManager {
             case SLOT_ADMIN_NATURAL_DEATH -> {
                 settings.setNaturalDeathLosesBounty(!settings.isNaturalDeathLosesBounty());
                 settings.save(plugin);
-                openAdminEditor(player);
+                editorSounds.toggle(player, settings.isNaturalDeathLosesBounty());
+                openAdminEditor(player, false);
             }
             case SLOT_ADMIN_CLAIM_ANNOUNCEMENTS -> {
                 settings.setAnnounceEnabled(!settings.isAnnounceEnabled());
                 settings.save(plugin);
-                openAdminEditor(player);
+                editorSounds.toggle(player, settings.isAnnounceEnabled());
+                openAdminEditor(player, false);
             }
             case SLOT_ADMIN_ANNOUNCE_THRESHOLD -> beginAdminPrompt(player, AdminPromptType.ANNOUNCE_THRESHOLD);
             case SLOT_ADMIN_BLOCK_SAME_IP -> {
                 settings.setBlockSameIpClaims(!settings.isBlockSameIpClaims());
                 settings.save(plugin);
-                openAdminEditor(player);
+                editorSounds.toggle(player, settings.isBlockSameIpClaims());
+                openAdminEditor(player, false);
             }
             case SLOT_ADMIN_BLOCK_SAME_SUBNET -> {
                 settings.setBlockSameSubnetClaims(!settings.isBlockSameSubnetClaims());
                 settings.save(plugin);
-                openAdminEditor(player);
+                editorSounds.toggle(player, settings.isBlockSameSubnetClaims());
+                openAdminEditor(player, false);
             }
             case SLOT_ADMIN_HISTORY_CAP -> beginAdminPrompt(player, AdminPromptType.HISTORY_CAP);
             default -> {
@@ -379,9 +413,11 @@ public final class GuiManager {
         openTextInput(player, prompt,
                 input -> handleAdminPrompt(player, promptType, input),
                 () -> {
+                    editorSounds.back(player);
                     sendCancelled(player);
                     reopenAdminEditor(player);
-                });
+                },
+                () -> editorSounds.open(player));
     }
 
     private TextDialogRequest createAdminPrompt(AdminPromptType promptType) {
@@ -459,7 +495,7 @@ public final class GuiManager {
                 return;
             }
             state.page = Math.max(0, state.page - 1);
-            openHistory(player, state.targetUuid, state.targetName, false);
+            openHistory(player, state.targetUuid, state.targetName, false, () -> guiSounds.previousPage(player));
             return;
         }
         if (slot == gui.next().slot()) {
@@ -467,19 +503,24 @@ public final class GuiManager {
                 return;
             }
             state.page = state.page + 1;
-            openHistory(player, state.targetUuid, state.targetName, false);
+            openHistory(player, state.targetUuid, state.targetName, false, () -> guiSounds.nextPage(player));
             return;
         }
         if (slot == gui.backToBounties().slot()) {
-            openMain(player);
+            BountyViewState mainState = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
+            openMain(player, mainState, () -> guiSounds.back(player));
         }
     }
 
     public void openHistory(Player viewer, UUID targetUuid, String targetName) {
-        openHistory(viewer, targetUuid, targetName, true);
+        openHistory(viewer, targetUuid, targetName, () -> guiSounds.open(viewer));
     }
 
-    private void openHistory(Player viewer, UUID targetUuid, String targetName, boolean applyCooldown) {
+    private void openHistory(Player viewer, UUID targetUuid, String targetName, Runnable afterOpen) {
+        openHistory(viewer, targetUuid, targetName, true, afterOpen);
+    }
+
+    private void openHistory(Player viewer, UUID targetUuid, String targetName, boolean applyCooldown, Runnable afterOpen) {
         if (applyCooldown && isHistoryOnCooldown(viewer)) {
             return;
         }
@@ -530,10 +571,17 @@ public final class GuiManager {
             placeButton(inventory, gui.backToBounties(), buttons.back());
 
             viewer.openInventory(inventory);
+            if (afterOpen != null) {
+                afterOpen.run();
+            }
         });
     }
 
     private void openMain(Player player, BountyViewState state) {
+        openMain(player, state, null);
+    }
+
+    private void openMain(Player player, BountyViewState state, Runnable afterOpen) {
         MainGui gui = guiConfig.mainGui();
         List<ActiveBounty> sorted = bountyService.getSortedBounties(state.getFilter(), state.getSearchTarget());
         int pageSize = gui.contentSlots().size();
@@ -589,6 +637,9 @@ public final class GuiManager {
         }
 
         player.openInventory(inventory);
+        if (afterOpen != null) {
+            afterOpen.run();
+        }
     }
 
     private ActiveBounty findBountyByUuid(UUID uuid) {
@@ -768,16 +819,23 @@ public final class GuiManager {
         Map<String, String> replacements = new HashMap<>();
         replacements.put("setting", key);
         messages.send(player, "editor.invalid-input", EDITOR_INVALID_INPUT_MESSAGE, replacements);
+        editorSounds.error(player);
     }
 
     private void reopenAdminEditor(Player player) {
-        scheduler.runForPlayer(player, () -> openAdminEditor(player));
+        scheduler.runForPlayer(player, () -> openAdminEditor(player, false));
     }
 
-    private void openTextInput(Player player, TextDialogRequest request, Consumer<String> onInput, Runnable onCancel) {
+    private void openTextInput(Player player,
+                               TextDialogRequest request,
+                               Consumer<String> onInput,
+                               Runnable onCancel,
+                               Runnable onNativeOpened) {
         warnFallbackAdminOnce(player);
         suppressNextClose(player);
-        dialogInputs.openTextInput(player, request, onInput, onCancel);
+        if (dialogInputs.openTextInput(player, request, onInput, onCancel) && onNativeOpened != null) {
+            onNativeOpened.run();
+        }
     }
 
     private void sendCancelled(Player player) {

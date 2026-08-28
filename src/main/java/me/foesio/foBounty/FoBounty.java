@@ -9,6 +9,10 @@ import me.foesio.core.message.FoMessageMigrations;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.reload.FoReloadRegistry;
 import me.foesio.core.reload.FoReloadResult;
+import me.foesio.core.sound.FoAdminSounds;
+import me.foesio.core.sound.FoEditorSounds;
+import me.foesio.core.sound.FoGuiSounds;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foBounty.command.BountyAdminCommand;
 import me.foesio.foBounty.command.BountyCommand;
@@ -46,6 +50,10 @@ public final class FoBounty extends JavaPlugin {
     private final PluginSettings settings = new PluginSettings();
     private FoCoreContext core;
     private FoMessageService messages;
+    private FoSoundService sounds;
+    private FoEditorSounds editorSounds;
+    private FoGuiSounds guiSounds;
+    private FoAdminSounds adminSounds;
     private ConfiguredTextDialogs textDialogs;
     private GuiConfig guiConfig;
     private BountyService bountyService;
@@ -56,11 +64,15 @@ public final class FoBounty extends JavaPlugin {
     public void onEnable() {
         settings.load(this);
         core = createCoreContext();
+        sounds = core.createSounds();
+        editorSounds = FoEditorSounds.create(sounds);
+        guiSounds = FoGuiSounds.create(sounds);
+        adminSounds = FoAdminSounds.create(sounds);
         core.warnIfNativeDialogsUnavailable();
         startMetrics(core);
         copyLegacyMessageFileIfNeeded();
         messages = FoMessageService.load(this, messageMigrations());
-        UpdateNoticeService updates = core.createUpdateNotices(messages, UPDATE_PROJECT_ID).start();
+        UpdateNoticeService updates = core.createUpdateNotices(messages, UPDATE_PROJECT_ID, adminSounds).start();
         textDialogs = ConfiguredTextDialogs.create(this)
                 .register("search", searchDialogFallback());
         textDialogs.load();
@@ -71,7 +83,7 @@ public final class FoBounty extends JavaPlugin {
         FoTeamsHookService foTeamsHookService = new FoTeamsHookService(this);
         DiscordWebhookService discordWebhookService = new DiscordWebhookService(this);
 
-        bountyService = new BountyService(this, settings, playerLookupService, foTeamsHookService, core.scheduler());
+        bountyService = new BountyService(this, settings, playerLookupService, foTeamsHookService, core.scheduler(), sounds);
         bountyService.setEconomy(setupEconomy());
         try {
             bountyService.init();
@@ -83,7 +95,7 @@ public final class FoBounty extends JavaPlugin {
 
         CooldownService cooldownService = new CooldownService();
         guiManager = new GuiManager(this, settings, messages, guiConfig, bountyService, cooldownService,
-                core.textInputService(), textDialogs, core.inventoryCloseSuppressor(), core.scheduler());
+                core.textInputService(), textDialogs, core.inventoryCloseSuppressor(), core.scheduler(), editorSounds, guiSounds);
 
         BountyCommand bountyCommand = new BountyCommand(
                 settings,
@@ -92,7 +104,9 @@ public final class FoBounty extends JavaPlugin {
                 discordWebhookService,
                 playerLookupService,
                 guiManager,
-                cooldownService
+                cooldownService,
+                adminSounds,
+                sounds
         );
         BountyAdminCommand adminCommand = new BountyAdminCommand(
                 this,
@@ -102,7 +116,9 @@ public final class FoBounty extends JavaPlugin {
                 playerLookupService,
                 guiManager,
                 this::reloadAll,
-                updates::checkAndSendVersion
+                updates::checkAndSendVersion,
+                adminSounds,
+                sounds
         );
 
         if (getCommand("fobounty") != null) {
@@ -115,7 +131,7 @@ public final class FoBounty extends JavaPlugin {
         }
 
         Bukkit.getPluginManager().registerEvents(new GuiListener(guiManager, core.scheduler()), this);
-        Bukkit.getPluginManager().registerEvents(new PlayerDeathListener(settings, messages, bountyService, discordWebhookService), this);
+        Bukkit.getPluginManager().registerEvents(new PlayerDeathListener(settings, messages, bountyService, discordWebhookService, sounds), this);
         Bukkit.getPluginManager().registerEvents(new PlayerJoinListener(
                 bountyService,
                 playerLookupService
@@ -143,6 +159,7 @@ public final class FoBounty extends JavaPlugin {
         FoReloadResult result = FoReloadRegistry.create()
                 .add("settings", () -> settings.load(this))
                 .add("storage", bountyService::reloadStorageIfNeeded)
+                .add("sounds", sounds::reload)
                 .addMessages(messages)
                 .add("core", this::reloadCoreContext)
                 .add("dialogs", textDialogs::reload)
@@ -164,6 +181,18 @@ public final class FoBounty extends JavaPlugin {
 
     private FoCoreContext createCoreContext() {
         return FoPluginCore.create(this);
+    }
+
+    public FoSoundService sounds() {
+        return sounds;
+    }
+
+    public FoEditorSounds editorSounds() {
+        return editorSounds;
+    }
+
+    public FoAdminSounds adminSounds() {
+        return adminSounds;
     }
 
     private void startMetrics(FoCoreContext context) {

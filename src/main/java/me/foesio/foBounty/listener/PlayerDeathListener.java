@@ -1,6 +1,7 @@
 package me.foesio.foBounty.listener;
 
 import me.foesio.core.message.FoMessageService;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.foBounty.config.PluginSettings;
 import me.foesio.foBounty.service.BountyService;
 import me.foesio.foBounty.service.DiscordWebhookService;
@@ -45,6 +46,7 @@ public final class PlayerDeathListener implements Listener {
     private final FoMessageService messages;
     private final BountyService bountyService;
     private final DiscordWebhookService discordWebhookService;
+    private final FoSoundService sounds;
     private final Map<UUID, RecentAttacker> recentAttackers = new ConcurrentHashMap<>();
     private final Deque<AnchorActivation> recentAnchorActivations = new ArrayDeque<>();
     private final Deque<CrystalPlacement> recentCrystalPlacements = new ArrayDeque<>();
@@ -52,11 +54,13 @@ public final class PlayerDeathListener implements Listener {
     public PlayerDeathListener(PluginSettings settings,
                                FoMessageService messages,
                                BountyService bountyService,
-                               DiscordWebhookService discordWebhookService) {
+                               DiscordWebhookService discordWebhookService,
+                               FoSoundService sounds) {
         this.settings = settings;
         this.messages = messages;
         this.bountyService = bountyService;
         this.discordWebhookService = discordWebhookService;
+        this.sounds = sounds;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -131,6 +135,7 @@ public final class PlayerDeathListener implements Listener {
             replacements.put("amount", Style.formatMoney(result.getAmount()));
             replacements.put("target", result.getTargetName());
             messages.send(killer, "claim-reward", "claim-reward", replacements);
+            sounds.play(killer, "bounty.claimed");
             discordWebhookService.sendBountyClaimed(killer.getName(), result.getTargetName(), result.getAmount());
 
             if (settings.isAnnounceEnabled()
@@ -147,24 +152,29 @@ public final class PlayerDeathListener implements Listener {
 
         if (result.getStatus() == BountyService.ClaimStatus.NO_ECONOMY && killer != null) {
             messages.send(killer, "no-economy", "no-economy");
+            sounds.play(killer, "bounty.error");
             return;
         }
 
         if (result.getStatus() == BountyService.ClaimStatus.BLOCKED_ANTI_ABUSE && killer != null) {
             messages.send(killer, "claim-blocked-alt", "claim-blocked-alt");
+            sounds.play(killer, "bounty.error");
             return;
         }
 
         if (result.getStatus() == BountyService.ClaimStatus.BLOCKED_SAME_TEAM && killer != null) {
             messages.send(killer, "claim-blocked-team", "claim-blocked-team");
+            sounds.play(killer, "bounty.error");
             return;
         }
 
         if (result.getStatus() == BountyService.ClaimStatus.FAILURE) {
             if (killer != null) {
                 messages.send(killer, "claim-failed", "claim-failed");
+                sounds.play(killer, "bounty.error");
             } else {
                 messages.send(victim, "claim-failed", "claim-failed");
+                sounds.play(victim, "bounty.error");
             }
             return;
         }
@@ -172,6 +182,7 @@ public final class PlayerDeathListener implements Listener {
         if (result.getStatus() == BountyService.ClaimStatus.LOST_NATURAL) {
             Map<String, String> replacements = Map.of("amount", Style.formatMoney(result.getAmount()));
             messages.send(victim, "natural-lost", "natural-lost", replacements);
+            sounds.play(victim, "bounty.lost");
         }
     }
 

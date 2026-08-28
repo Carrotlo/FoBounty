@@ -1,6 +1,8 @@
 package me.foesio.foBounty.command;
 
 import me.foesio.core.message.FoMessageService;
+import me.foesio.core.sound.FoAdminSounds;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.foBounty.config.PluginSettings;
 import me.foesio.foBounty.gui.GuiManager;
 import me.foesio.foBounty.model.BountyHistoryEntry;
@@ -32,6 +34,8 @@ public final class BountyCommand implements TabExecutor {
     private final PlayerLookupService playerLookupService;
     private final GuiManager guiManager;
     private final CooldownService cooldownService;
+    private final FoAdminSounds adminSounds;
+    private final FoSoundService sounds;
 
     public BountyCommand(PluginSettings settings,
                          FoMessageService messages,
@@ -39,7 +43,9 @@ public final class BountyCommand implements TabExecutor {
                          DiscordWebhookService discordWebhookService,
                          PlayerLookupService playerLookupService,
                          GuiManager guiManager,
-                         CooldownService cooldownService) {
+                         CooldownService cooldownService,
+                         FoAdminSounds adminSounds,
+                         FoSoundService sounds) {
         this.settings = settings;
         this.messages = messages;
         this.bountyService = bountyService;
@@ -47,12 +53,15 @@ public final class BountyCommand implements TabExecutor {
         this.playerLookupService = playerLookupService;
         this.guiManager = guiManager;
         this.cooldownService = cooldownService;
+        this.adminSounds = adminSounds;
+        this.sounds = sounds;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("fobounty.use")) {
             messages.send(sender, "no-permission", "no-permission");
+            adminSounds.updateError(sender);
             return true;
         }
         if (!(sender instanceof Player player)) {
@@ -61,6 +70,7 @@ public final class BountyCommand implements TabExecutor {
         }
 
         if (cooldownService.isOnCooldown(player.getUniqueId(), "bounty-command", settings.getCommandCooldownMs())) {
+            adminSounds.updateError(player);
             return true;
         }
 
@@ -78,49 +88,66 @@ public final class BountyCommand implements TabExecutor {
         }
 
         guiManager.openMain(player);
+        adminSounds.updateError(player);
         return true;
     }
 
     private boolean handleAdd(Player player, String[] args) {
         if (args.length < 3) {
             guiManager.openMain(player);
+            adminSounds.updateError(player);
             return true;
         }
         OfflinePlayer target = playerLookupService.findExact(args[1]);
         if (target == null || target.getName() == null) {
             Map<String, String> replacements = Map.of("player", args[1]);
             messages.send(player, "unknown-player", "unknown-player", replacements);
+            playAddError(player);
             return true;
         }
         if (target.getUniqueId().equals(player.getUniqueId())) {
             messages.send(player, "self-bounty", "self-bounty");
+            playAddError(player);
             return true;
         }
         long amount;
         Long parsedAmount = Style.parseAmount(args[2]);
         if (parsedAmount == null) {
             messages.send(player, "invalid-number", "invalid-number");
+            playAddError(player);
             return true;
         }
         amount = parsedAmount;
 
         if (amount < settings.getMinPrice()) {
             messages.send(player, "amount-too-low", "amount-too-low", Map.of("min", Style.formatMoney(settings.getMinPrice())));
+            playAddError(player);
             return true;
         }
         if (amount > settings.getMaxPrice()) {
             messages.send(player, "amount-too-high", "amount-too-high", Map.of("max", Style.formatMoney(settings.getMaxPrice())));
+            playAddError(player);
             return true;
         }
         if (cooldownService.isOnCooldown(player.getUniqueId(), "bounty-add", settings.getBountyAddCooldownMs())) {
+            adminSounds.updateError(player);
             return true;
         }
 
         BountyService.AddResult result = bountyService.addBounty(player, target, amount);
         switch (result.getStatus()) {
-            case NO_ECONOMY -> messages.send(player, "no-economy", "no-economy");
-            case NO_MONEY -> messages.send(player, "not-enough-money", "not-enough-money");
-            case FAILURE -> messages.send(player, "add-failed", "add-failed");
+            case NO_ECONOMY -> {
+                messages.send(player, "no-economy", "no-economy");
+                playAddError(player);
+            }
+            case NO_MONEY -> {
+                messages.send(player, "not-enough-money", "not-enough-money");
+                playAddError(player);
+            }
+            case FAILURE -> {
+                messages.send(player, "add-failed", "add-failed");
+                playAddError(player);
+            }
             case SUCCESS -> {
                 Map<String, String> replacements = new HashMap<>();
                 replacements.put("amount", Style.formatMoney(amount));
@@ -143,8 +170,13 @@ public final class BountyCommand implements TabExecutor {
         return true;
     }
 
+    private void playAddError(Player player) {
+        adminSounds.updateError(player);
+    }
+
     private boolean handleHistory(Player player, String[] args) {
         if (cooldownService.isOnCooldown(player.getUniqueId(), "history", settings.getHistoryRequestCooldownMs())) {
+            adminSounds.updateError(player);
             return true;
         }
 
@@ -153,6 +185,7 @@ public final class BountyCommand implements TabExecutor {
             target = playerLookupService.findExact(args[1]);
             if (target == null || target.getName() == null) {
                 messages.send(player, "unknown-player", "unknown-player", Map.of("player", args[1]));
+                adminSounds.updateError(player);
                 return true;
             }
         } else {

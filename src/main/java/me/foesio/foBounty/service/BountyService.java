@@ -1,6 +1,7 @@
 package me.foesio.foBounty.service;
 
 import me.foesio.core.scheduler.FoScheduler;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.foBounty.config.PluginSettings;
 import me.foesio.foBounty.data.SQLiteStore;
 import me.foesio.foBounty.economy.EconomyBridge;
@@ -124,6 +125,7 @@ public final class BountyService {
     private final PlayerLookupService playerLookupService;
     private final FoTeamsHookService foTeamsHookService;
     private final FoScheduler scheduler;
+    private final FoSoundService sounds;
     private final ExecutorService dbExecutor;
 
     private final Map<UUID, ActiveBounty> activeBounties = new ConcurrentHashMap<>();
@@ -141,12 +143,14 @@ public final class BountyService {
                          PluginSettings settings,
                          PlayerLookupService playerLookupService,
                          FoTeamsHookService foTeamsHookService,
-                         FoScheduler scheduler) {
+                         FoScheduler scheduler,
+                         FoSoundService sounds) {
         this.plugin = plugin;
         this.settings = settings;
         this.playerLookupService = playerLookupService;
         this.foTeamsHookService = foTeamsHookService;
         this.scheduler = scheduler;
+        this.sounds = sounds;
         this.databaseFile = settings.getDatabaseFile();
         this.store = new SQLiteStore(plugin, databaseFile);
         this.dbExecutor = new ThreadPoolExecutor(
@@ -291,6 +295,7 @@ public final class BountyService {
         playerLookupService.index(setter);
         playerLookupService.index(target);
         markBountiesChanged();
+        sounds.play(setter, "bounty.set");
 
         return new AddResult(AddStatus.SUCCESS, bounty.getTotalAmount());
     }

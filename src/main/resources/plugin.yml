@@ -11,11 +11,9 @@ softdepend: [ PlaceholderAPI, Vault, FoTeams ]
 commands:
   fobounty:
     aliases: [ bounty ]
-    permission: fobounty.use
     usage: /<command> [add <player> <amount>|history <player>]
   fobountyadmin:
     aliases: [ bountyadmin ]
-    permission: fobounty.admin
     usage: /<command> <editor|reload|version|remove> [player]
 
 permissions:
