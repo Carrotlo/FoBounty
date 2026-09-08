@@ -3,10 +3,17 @@ package me.foesio.foBounty.gui;
 import me.foesio.core.dialog.ConfiguredTextDialogs;
 import me.foesio.core.dialog.DialogButton;
 import me.foesio.core.dialog.DialogInputService;
+import me.foesio.core.dialog.DialogIcons;
 import me.foesio.core.dialog.TextDialogRequest;
+import me.foesio.core.editor.CycleOption;
+import me.foesio.core.editor.CycleOptions;
+import me.foesio.core.editor.EditorItemFactory;
+import me.foesio.core.gui.FoButtonStyle;
 import me.foesio.core.gui.GuiButtonConfig;
+import me.foesio.core.gui.GuiTitles;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.message.FoMessageService;
+import me.foesio.core.message.FoStyle;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.core.sound.FoEditorSounds;
 import me.foesio.core.sound.FoGuiSounds;
@@ -156,43 +163,32 @@ public final class GuiManager {
             inventory.setItem(i, filler);
         }
 
-        inventory.setItem(SLOT_ADMIN_MIN_PRICE, Items.make(Material.GOLD_INGOT, "&" + Style.THEME_HEX + "Min Price", List.of(
-                "&" + Style.WHITE_HEX + "Current: &" + Style.THEME_HEX + "$" + Style.formatMoney(settings.getMinPrice()),
-                "&" + Style.WHITE_HEX + "Click to edit"
-        )));
-        inventory.setItem(SLOT_ADMIN_MAX_PRICE, Items.make(Material.EMERALD_BLOCK, "&" + Style.THEME_HEX + "Max Price", List.of(
-                "&" + Style.WHITE_HEX + "Current: &" + Style.THEME_HEX + "$" + Style.formatMoney(settings.getMaxPrice()),
-                "&" + Style.WHITE_HEX + "Click to edit"
-        )));
-        inventory.setItem(SLOT_ADMIN_NATURAL_DEATH, Items.make(Material.REDSTONE, "&" + Style.THEME_HEX + "Natural Death Loses Bounty", List.of(
-                "&" + Style.WHITE_HEX + "State: " + (settings.isNaturalDeathLosesBounty() ? "&" + Style.GOOD_HEX + "enabled" : "&" + Style.BAD_HEX + "disabled"),
-                "&" + Style.WHITE_HEX + "Click to toggle"
-        )));
-        inventory.setItem(SLOT_ADMIN_CLAIM_ANNOUNCEMENTS, Items.make(Material.BELL, "&" + Style.THEME_HEX + "Claim Announcements", List.of(
-                "&" + Style.WHITE_HEX + "State: " + (settings.isAnnounceEnabled() ? "&" + Style.GOOD_HEX + "enabled" : "&" + Style.BAD_HEX + "disabled"),
-                "&" + Style.WHITE_HEX + "Click to toggle"
-        )));
-        inventory.setItem(SLOT_ADMIN_ANNOUNCE_THRESHOLD, Items.make(Material.LECTERN, "&" + Style.THEME_HEX + "Announce Threshold", List.of(
-                "&" + Style.WHITE_HEX + "Current: &" + Style.THEME_HEX + settings.getAnnounceMinimumAmount(),
-                "&" + Style.WHITE_HEX + "Click to edit",
-                "&" + Style.WHITE_HEX + "-1 means announce any claim"
-        )));
-        inventory.setItem(SLOT_ADMIN_BLOCK_SAME_IP, Items.make(Material.IRON_BARS, "&" + Style.THEME_HEX + "Block Same IP Claims", List.of(
-                "&" + Style.WHITE_HEX + "State: " + (settings.isBlockSameIpClaims() ? "&" + Style.GOOD_HEX + "enabled" : "&" + Style.BAD_HEX + "disabled"),
-                "&" + Style.WHITE_HEX + "Click to toggle"
-        )));
-        inventory.setItem(SLOT_ADMIN_BLOCK_SAME_SUBNET, Items.make(Material.CHAINMAIL_CHESTPLATE, "&" + Style.THEME_HEX + "Block Same Subnet Claims", List.of(
-                "&" + Style.WHITE_HEX + "State: " + (settings.isBlockSameSubnetClaims() ? "&" + Style.GOOD_HEX + "enabled" : "&" + Style.BAD_HEX + "disabled"),
-                "&" + Style.WHITE_HEX + "Click to toggle"
-        )));
-        inventory.setItem(SLOT_ADMIN_HISTORY_CAP, Items.make(Material.BOOKSHELF, "&" + Style.THEME_HEX + "History Cap", List.of(
-                "&" + Style.WHITE_HEX + "Current: &" + Style.THEME_HEX + settings.getHistoryCap(),
-                "&" + Style.WHITE_HEX + "Click to edit"
-        )));
-        player.openInventory(inventory);
+        inventory.setItem(SLOT_ADMIN_MIN_PRICE, editorButton(player, Material.GOLD_INGOT, FoStyle.THEME, "Min Price", List.of(
+                "Current: $" + Style.formatMoney(settings.getMinPrice())
+        ), "edit the minimum price"));
+        inventory.setItem(SLOT_ADMIN_MAX_PRICE, editorButton(player, Material.EMERALD_BLOCK, FoStyle.THEME, "Max Price", List.of(
+                "Current: $" + Style.formatMoney(settings.getMaxPrice())
+        ), "edit the maximum price"));
+        inventory.setItem(SLOT_ADMIN_NATURAL_DEATH, EditorItemFactory.toggle(player, "Natural Death Loses Bounty", settings.isNaturalDeathLosesBounty()));
+        inventory.setItem(SLOT_ADMIN_CLAIM_ANNOUNCEMENTS, EditorItemFactory.toggle(player, "Claim Announcements", settings.isAnnounceEnabled()));
+        inventory.setItem(SLOT_ADMIN_ANNOUNCE_THRESHOLD, editorButton(player, Material.LECTERN, FoStyle.THEME, "Announce Threshold", List.of(
+                "Current: " + settings.getAnnounceMinimumAmount(),
+                "-1 announces any claim."
+        ), "edit the announce threshold"));
+        inventory.setItem(SLOT_ADMIN_BLOCK_SAME_IP, EditorItemFactory.toggle(player, "Block Same IP Claims", settings.isBlockSameIpClaims()));
+        inventory.setItem(SLOT_ADMIN_BLOCK_SAME_SUBNET, EditorItemFactory.toggle(player, "Block Same Subnet Claims", settings.isBlockSameSubnetClaims()));
+        inventory.setItem(SLOT_ADMIN_HISTORY_CAP, editorButton(player, Material.BOOKSHELF, FoStyle.THEME, "History Cap", List.of(
+                "Current: " + settings.getHistoryCap()
+        ), "edit the history cap"));
+        openForViewer(player, inventory);
         if (playOpenSound) {
             editorSounds.open(player);
         }
+    }
+
+    private ItemStack editorButton(Player player, Material material, String color, String label,
+                                   List<String> information, String action) {
+        return EditorItemFactory.button(player, material, color, label, information, action);
     }
 
     public void beginSearch(Player player) {
@@ -550,27 +546,27 @@ public final class GuiManager {
             List<BountyHistoryEntry> pageEntries = entries.subList(from, to);
 
             HistoryHolder holder = new HistoryHolder(targetUuid, targetName);
-            String title = Style.colorize("&8" + Style.smallCaps(gui.title()));
+            String title = GuiTitles.format(gui.title());
             Inventory inventory = Bukkit.createInventory(holder, gui.size(), title);
             holder.setInventory(inventory);
 
-            fillInventory(inventory, gui.filler());
-            fillSlots(inventory, gui.contentSlots(), gui.emptyContent());
+            fillInventory(viewer, inventory, gui.filler());
+            fillSlots(viewer, inventory, gui.contentSlots(), gui.emptyContent());
 
             for (int i = 0; i < pageEntries.size() && i < pageSize; i++) {
                 BountyHistoryEntry entry = pageEntries.get(i);
-                inventory.setItem(gui.contentSlots().get(i), createHistoryEntryItem(gui, entry));
+                inventory.setItem(gui.contentSlots().get(i), createHistoryEntryItem(viewer, gui, entry));
             }
 
             if (currentState.page > 0) {
-                placeButton(inventory, gui.back(), buttons.previousPage(currentState.page, maxPage));
+                placeButton(inventory, gui.back(), buttons.previousPage(viewer, currentState.page, maxPage));
             }
             if (currentState.page < maxPage) {
-                placeButton(inventory, gui.next(), buttons.nextPage(currentState.page, maxPage));
+                placeButton(inventory, gui.next(), buttons.nextPage(viewer, currentState.page, maxPage));
             }
-            placeButton(inventory, gui.backToBounties(), buttons.back());
+            placeButton(inventory, gui.backToBounties(), buttons.back(viewer));
 
-            viewer.openInventory(inventory);
+            openForViewer(viewer, inventory);
             if (afterOpen != null) {
                 afterOpen.run();
             }
@@ -593,12 +589,12 @@ public final class GuiManager {
         List<ActiveBounty> pageEntries = sorted.subList(from, to);
 
         BountyMainHolder holder = new BountyMainHolder();
-        String title = Style.colorize("&8" + Style.smallCaps(gui.title()));
+        String title = GuiTitles.format(gui.title());
         Inventory inventory = Bukkit.createInventory(holder, gui.size(), title);
         holder.setInventory(inventory);
 
-        fillInventory(inventory, gui.filler());
-        fillSlots(inventory, gui.contentSlots(), gui.emptyContent());
+        fillInventory(player, inventory, gui.filler());
+        fillSlots(player, inventory, gui.contentSlots(), gui.emptyContent());
 
         long ownBounty = bountyService.getCurrentBounty(player.getUniqueId());
         long totalEarned = bountyService.getCachedTotalEarned(player.getUniqueId());
@@ -611,20 +607,20 @@ public final class GuiManager {
         basePlaceholders.put("page", String.valueOf(state.getPage() + 1));
         basePlaceholders.put("max_page", String.valueOf(maxPage + 1));
 
-        placeItem(inventory, gui.info(), basePlaceholders);
-        placeFilterItem(inventory, gui, state.getFilter());
-        placeItem(inventory, gui.refresh(), basePlaceholders);
-        placeButton(inventory, gui.search(), buttons.search(state.getSearchTarget()));
+        placeItem(player, inventory, gui.info(), basePlaceholders);
+        placeFilterItem(player, inventory, gui, state.getFilter());
+        placeItem(player, inventory, gui.refresh(), basePlaceholders);
+        placeButton(inventory, gui.search(), buttons.search(player, state.getSearchTarget()));
         if (state.getSearchTarget() != null && !state.getSearchTarget().isBlank()) {
-            placeButton(inventory, gui.clearSearch(), buttons.clearSearch("bounties"));
+            placeButton(inventory, gui.clearSearch(), buttons.clearSearch(player, "bounties"));
         }
-        placeItem(inventory, gui.history(), basePlaceholders);
+        placeItem(player, inventory, gui.history(), basePlaceholders);
 
         if (state.getPage() > 0) {
-            placeButton(inventory, gui.back(), buttons.previousPage(state.getPage(), maxPage));
+            placeButton(inventory, gui.back(), buttons.previousPage(player, state.getPage(), maxPage));
         }
         if (state.getPage() < maxPage) {
-            placeButton(inventory, gui.next(), buttons.nextPage(state.getPage(), maxPage));
+            placeButton(inventory, gui.next(), buttons.nextPage(player, state.getPage(), maxPage));
         }
 
         for (int i = 0; i < pageEntries.size(); i++) {
@@ -633,10 +629,10 @@ public final class GuiManager {
             if (bounty == null) {
                 continue;
             }
-            inventory.setItem(gui.contentSlots().get(i), createBountyItem(gui, bounty));
+            inventory.setItem(gui.contentSlots().get(i), createBountyItem(player, gui, bounty));
         }
 
-        player.openInventory(inventory);
+        openForViewer(player, inventory);
         if (afterOpen != null) {
             afterOpen.run();
         }
@@ -646,15 +642,25 @@ public final class GuiManager {
         return bountyService.getBountySnapshot(uuid, 0);
     }
 
-    private void fillInventory(Inventory inventory, GuiItem item) {
-        ItemStack stack = createConfiguredItem(item, Map.of(), Map.of());
+    private void openForViewer(Player player, Inventory inventory) {
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item != null) {
+                inventory.setItem(slot, DialogIcons.forViewer(player, item));
+            }
+        }
+        player.openInventory(inventory);
+    }
+
+    private void fillInventory(Player viewer, Inventory inventory, GuiItem item) {
+        ItemStack stack = createConfiguredItem(viewer, item, Map.of(), Map.of());
         for (int i = 0; i < inventory.getSize(); i++) {
             inventory.setItem(i, stack);
         }
     }
 
-    private void fillSlots(Inventory inventory, List<Integer> slots, GuiItem item) {
-        ItemStack stack = createConfiguredItem(item, Map.of(), Map.of());
+    private void fillSlots(Player viewer, Inventory inventory, List<Integer> slots, GuiItem item) {
+        ItemStack stack = createConfiguredItem(viewer, item, Map.of(), Map.of());
         for (int slot : slots) {
             if (isValidSlot(inventory, slot)) {
                 inventory.setItem(slot, stack);
@@ -662,11 +668,11 @@ public final class GuiManager {
         }
     }
 
-    private void placeItem(Inventory inventory, GuiItem item, Map<String, String> placeholders) {
+    private void placeItem(Player viewer, Inventory inventory, GuiItem item, Map<String, String> placeholders) {
         if (!isValidSlot(inventory, item.slot())) {
             return;
         }
-        inventory.setItem(item.slot(), createConfiguredItem(item, placeholders, Map.of()));
+        inventory.setItem(item.slot(), createConfiguredItem(viewer, item, placeholders, Map.of()));
     }
 
     private void placeButton(Inventory inventory, GuiButtonSlot button, ItemStack item) {
@@ -676,18 +682,31 @@ public final class GuiManager {
         inventory.setItem(button.slot(), item);
     }
 
-    private void placeFilterItem(Inventory inventory, MainGui gui, BountyFilter selected) {
-        List<String> filters = new ArrayList<>();
-        for (BountyFilter filter : BountyFilter.values()) {
-            String template = filter == selected ? gui.filterSelectedLine() : gui.filterUnselectedLine();
-            filters.add(render(template, Map.of("filter", filter.getLabel())));
-        }
+    private void placeFilterItem(Player viewer, Inventory inventory, MainGui gui, BountyFilter selected) {
         if (isValidSlot(inventory, gui.filter().slot())) {
-            inventory.setItem(gui.filter().slot(), createConfiguredItem(gui.filter(), Map.of(), Map.of("filters", filters)));
+            List<CycleOption> options = List.of(BountyFilter.values()).stream()
+                    .map(filter -> new CycleOption(filter.name(), filter.getLabel()))
+                    .toList();
+            String configuredName = messages.renderTemplateForViewer(viewer, gui.filter().name(), Map.of());
+            List<String> filterInformation = CycleOptions.information(viewer, messages, selected.name(), options)
+                    .stream()
+                    .map(FoButtonStyle::informationLine)
+                    .toList();
+            List<String> configuredLore = renderLore(
+                    gui.filter().lore(),
+                    Map.of(),
+                    Map.of("filters", filterInformation)
+            );
+            inventory.setItem(gui.filter().slot(), Items.make(
+                    viewer,
+                    gui.filter().material(),
+                    configuredName,
+                    configuredLore
+            ));
         }
     }
 
-    private ItemStack createBountyItem(MainGui gui, ActiveBounty bounty) {
+    private ItemStack createBountyItem(Player viewer, MainGui gui, ActiveBounty bounty) {
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("player", safeName(bounty.getTargetName(), "Unknown"));
         placeholders.put("target", safeName(bounty.getTargetName(), "Unknown"));
@@ -719,9 +738,9 @@ public final class GuiManager {
         ItemStack stack;
         List<String> lore = renderLore(item.lore(), placeholders, Map.of("contributions", contributions));
         if (item.material() == Material.PLAYER_HEAD) {
-            stack = Items.playerHead(bounty.getTargetUuid(), render(item.name(), placeholders), lore);
+            stack = Items.playerHead(viewer, bounty.getTargetUuid(), render(item.name(), placeholders), lore);
         } else {
-            stack = Items.make(item.material(), render(item.name(), placeholders), lore);
+            stack = Items.make(viewer, item.material(), render(item.name(), placeholders), lore);
         }
         stack.setAmount(item.amount());
         applyItemOptions(stack, item);
@@ -733,7 +752,7 @@ public final class GuiManager {
         return stack;
     }
 
-    private ItemStack createHistoryEntryItem(HistoryGui gui, BountyHistoryEntry entry) {
+    private ItemStack createHistoryEntryItem(Player viewer, HistoryGui gui, BountyHistoryEntry entry) {
         GuiItem item = entry.getType() == HistoryType.CLAIMED ? gui.claimedEntry() : gui.lostEntry();
         String related = entry.getType() == HistoryType.CLAIMED
                 ? safeName(entry.getRelatedName(), "Unknown")
@@ -747,11 +766,11 @@ public final class GuiManager {
         placeholders.put("amount_raw", String.valueOf(entry.getAmount()));
         placeholders.put("reason", entry.getReason());
         placeholders.put("time", Style.formatTimestamp(entry.getOccurredAt()));
-        return createConfiguredItem(item, placeholders, Map.of());
+        return createConfiguredItem(viewer, item, placeholders, Map.of());
     }
 
-    private ItemStack createConfiguredItem(GuiItem item, Map<String, String> placeholders, Map<String, List<String>> expansions) {
-        ItemStack stack = Items.make(item.material(), render(item.name(), placeholders), renderLore(item.lore(), placeholders, expansions));
+    private ItemStack createConfiguredItem(Player viewer, GuiItem item, Map<String, String> placeholders, Map<String, List<String>> expansions) {
+        ItemStack stack = Items.make(viewer, item.material(), render(item.name(), placeholders), renderLore(item.lore(), placeholders, expansions));
         stack.setAmount(item.amount());
         applyItemOptions(stack, item);
         return stack;
@@ -862,7 +881,7 @@ public final class GuiManager {
     }
 
     private void warnFallbackAdminOnce(Player player) {
-        if (dialogInputs.support().canUseNativeDialogs()
+        if (dialogInputs.support().canUseNativeDialogs(player)
                 || !dialogInputs.support().warnOnFallback()
                 || !player.hasPermission("fobounty.admin")
                 || !warnedFallbackAdmins.add(player.getUniqueId())) {

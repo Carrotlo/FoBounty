@@ -4,7 +4,7 @@
 # Common item keys: slot, material, amount, name, lore, custom-model-data, glow, flags.
 # Valid main placeholders: {own_bounty}, {own_bounty_raw}, {total_earned}, {total_earned_raw}, {search}, {page}, {max_page}.
 
-title: "Bounty Browser"
+title: "ʙᴏᴜɴᴛʏ ʙʀᴏᴡꜱᴇʀ"
 rows: 6
 
 # Dynamic active bounty entries render in these slots.
@@ -43,26 +43,39 @@ items:
   info:
     slot: 4
     material: CLOCK
-    name: "{theme}Info"
+    name: ":clock: {theme}&lINFO"
     lore:
-      - "{white}Use {theme}/bounty add <player> <amount>"
-      - "{white}Your bounty: {theme}${own_bounty}"
-      - "{white}Total earned: {theme}${total_earned}"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fUse {theme}/bounty add <player> <amount>"
+      - "&7&l | &fYour bounty: {theme}${own_bounty}"
+      - "&7&l | &fTotal earned: {theme}${total_earned}"
   filter:
     slot: 48
     material: HOPPER
-    name: "{theme}Filter"
+    name: ":hopper: {theme}&lFILTER"
     lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSelect which bounties to show."
       - "{filters}"
+      - " "
+      - "{good}→ Click to Cycle ←"
     # Valid placeholder for these lines: {filter}.
-    selected-line: "{theme}• {filter}"
-    unselected-line: "{white}• {filter}"
+    selected-line: "&7&l | &f{theme}• {filter}"
+    unselected-line: "&7&l | &f{white}• {filter}"
   refresh:
     slot: 49
     material: SKELETON_SKULL
-    name: "{theme}Refresh"
+    name: ":skeleton_skull: {theme}&lREFRESH"
     lore:
-      - "{white}Click to refresh this page"
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fRefreshes the current page."
+      - " "
+      - "{good}→ Click to Refresh ←"
   search:
     slot: 50
   clear-search:
@@ -70,9 +83,14 @@ items:
   history:
     slot: 47
     material: WRITABLE_BOOK
-    name: "{theme}History"
+    name: ":writable_book: {theme}&lHISTORY"
     lore:
-      - "{white}View bounty claim/loss history"
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fView bounty claim and loss history."
+      - " "
+      - "{good}→ Click to View History ←"
   back:
     slot: 45
   next:
@@ -84,8 +102,13 @@ bounty-item:
   material: PLAYER_HEAD
   name: "{theme}{player}"
   lore:
-    - "{white}Amount: {theme}${amount}"
-    - "{white}Set by:"
+    - "&8ʙᴜᴛᴛᴏɴ"
+    - " "
+    - "&eⓘ Information ↓"
+    - "&7&l | &fAmount: {theme}${amount}"
+    - "&7&l | &fSet by:"
     - "{contributions}"
+    - " "
+    - "{good}→ Click to View History ←"
   # Valid contribution placeholders: {setter}, {amount}, {amount_raw}.
-  contribution-line: "{white}• {theme}{setter} {white}- {theme}${amount}"
+  contribution-line: "&7&l | &f{theme}• {setter} {white}- {theme}${amount}"

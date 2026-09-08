@@ -72,6 +72,7 @@ public final class FoBounty extends JavaPlugin {
         startMetrics(core);
         copyLegacyMessageFileIfNeeded();
         messages = FoMessageService.load(this, messageMigrations());
+        migrateSprites();
         UpdateNoticeService updates = core.createUpdateNotices(messages, UPDATE_PROJECT_ID, adminSounds).start();
         textDialogs = ConfiguredTextDialogs.create(this)
                 .register("search", searchDialogFallback());
@@ -309,6 +310,26 @@ public final class FoBounty extends JavaPlugin {
         }
         config.set(path, value);
         return true;
+    }
+
+    private void migrateSprites() {
+        messages.migrateToVersion(core.migrations(), 1, config -> {
+            boolean changed = false;
+            changed |= FoMessageService.addMissingToken(config, "tokens.prefix", ":gold_nugget:", null);
+            changed |= FoMessageService.addMissingToken(config, "add-success", ":emerald:");
+            changed |= FoMessageService.addMissingToken(config, "add-failed", ":redstone:");
+            changed |= FoMessageService.addMissingToken(config, "admin-remove-success", ":emerald:");
+            changed |= FoMessageService.addMissingToken(config, "admin-remove-failed", ":redstone:");
+            changed |= FoMessageService.addMissingToken(config, "reload-success", ":emerald:");
+            changed |= FoMessageService.addMissingToken(config, "reload-failed", ":redstone:");
+            changed |= FoMessageService.addMissingToken(config, "claim-reward", ":emerald:");
+            changed |= FoMessageService.addMissingToken(config, "claim-failed", ":redstone:");
+            changed |= FoMessageService.addMissingToken(config, "editor-saved", ":emerald:");
+            changed |= FoMessageService.addMissingToken(config, "editor-invalid", ":redstone:");
+            changed |= FoMessageService.addMissingToken(config, "editor.opened", ":book:");
+            changed |= FoMessageService.addMissingToken(config, "editor.deleted", ":lava_bucket:");
+            return true;
+        });
     }
 
     private void registerPlaceholders() {

@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 final class YamlFileUpdater {
@@ -21,7 +22,7 @@ final class YamlFileUpdater {
     static YamlConfiguration update(JavaPlugin plugin,
                                     String resourceName,
                                     Set<String> obsoletePaths,
-                                    Map<String, String> exactDefaultReplacements) {
+                                    Map<String, ?> exactDefaultReplacements) {
         File file = new File(plugin.getDataFolder(), resourceName);
         if (!file.exists()) {
             plugin.saveResource(resourceName, false);
@@ -44,10 +45,10 @@ final class YamlFileUpdater {
             }
         }
 
-        for (Map.Entry<String, String> entry : exactDefaultReplacements.entrySet()) {
+        for (Map.Entry<String, ?> entry : exactDefaultReplacements.entrySet()) {
             String path = entry.getKey();
-            String oldDefault = entry.getValue();
-            if (oldDefault.equals(current.getString(path))) {
+            Object oldDefault = entry.getValue();
+            if (Objects.equals(oldDefault, current.get(path)) && defaults.isSet(path)) {
                 current.set(path, defaults.get(path));
                 changed = true;
             }

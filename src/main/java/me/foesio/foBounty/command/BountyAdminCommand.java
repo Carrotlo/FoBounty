@@ -19,7 +19,6 @@ import org.bukkit.util.StringUtil;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -100,9 +99,6 @@ public final class BountyAdminCommand implements TabExecutor {
                 return true;
             }
             case "version" -> {
-                Map<String, String> replacements = new HashMap<>();
-                replacements.put("version", plugin.getDescription().getVersion());
-                messages.send(sender, "admin-version", "admin-version", replacements);
                 updateCheckCallback.accept(sender);
                 return true;
             }

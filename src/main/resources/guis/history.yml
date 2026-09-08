@@ -3,7 +3,7 @@
 # Titles are rendered dark gray and small caps in code to match Fo GUI style.
 # Common item keys: slot, material, amount, name, lore, custom-model-data, glow, flags.
 
-title: "Bounty History"
+title: "ʙᴏᴜɴᴛʏ ʜɪꜱᴛᴏʀʏ"
 rows: 6
 
 # Dynamic history entries render in these slots.

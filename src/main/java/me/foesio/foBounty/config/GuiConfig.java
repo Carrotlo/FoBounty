@@ -50,7 +50,12 @@ public final class GuiConfig {
     }
 
     private MainGui loadMainGui() {
-        YamlConfiguration cfg = YamlFileUpdater.update(plugin, "guis/bounty-main.yml", MAIN_SHARED_BUTTON_TEMPLATE_PATHS, Map.of());
+        YamlConfiguration cfg = YamlFileUpdater.update(
+                plugin,
+                "guis/bounty-main.yml",
+                MAIN_SHARED_BUTTON_TEMPLATE_PATHS,
+                mainStyleReplacements()
+        );
         int rows = readRows(cfg, "rows", 6);
         int size = rows * 9;
         return new MainGui(
@@ -59,26 +64,81 @@ public final class GuiConfig {
                 readSlots(cfg, "content-slots", size, List.of(10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34)),
                 readItem(cfg, "filler", size, new GuiItem(-1, Material.GRAY_STAINED_GLASS_PANE, 1, " ", List.of(), null, false, List.of())),
                 readItem(cfg, "empty-content", size, new GuiItem(-1, Material.LIGHT_GRAY_STAINED_GLASS_PANE, 1, " ", List.of(), null, false, List.of())),
-                readItem(cfg, "items.info", size, new GuiItem(4, Material.CLOCK, 1, "&" + Style.THEME_HEX + "Info", List.of(
-                        "&" + Style.WHITE_HEX + "Use &" + Style.THEME_HEX + "/bounty add <player> <amount>",
-                        "&" + Style.WHITE_HEX + "Your bounty: &" + Style.THEME_HEX + "${own_bounty}",
-                        "&" + Style.WHITE_HEX + "Total earned: &" + Style.THEME_HEX + "${total_earned}"
+                readItem(cfg, "items.info", size, new GuiItem(4, Material.CLOCK, 1, ":clock: &" + Style.THEME_HEX + "&lINFO", List.of(
+                        " ",
+                        "&eⓘ Information ↓",
+                        "&7&l | &fUse &" + Style.THEME_HEX + "/bounty add <player> <amount>",
+                        "&7&l | &fYour bounty: &" + Style.THEME_HEX + "${own_bounty}",
+                        "&7&l | &fTotal earned: &" + Style.THEME_HEX + "${total_earned}"
                 ), null, false, List.of())),
-                readItem(cfg, "items.filter", size, new GuiItem(48, Material.HOPPER, 1, "&" + Style.THEME_HEX + "Filter", List.of("{filters}"), null, false, List.of())),
-                cfg.getString("items.filter.selected-line", "&" + Style.THEME_HEX + Style.BULLET + " {filter}"),
-                cfg.getString("items.filter.unselected-line", "&" + Style.WHITE_HEX + Style.BULLET + " {filter}"),
-                readItem(cfg, "items.refresh", size, new GuiItem(49, Material.SKELETON_SKULL, 1, "&" + Style.THEME_HEX + "Refresh", List.of("&" + Style.WHITE_HEX + "Click to refresh this page"), null, false, List.of())),
+                readItem(cfg, "items.filter", size, new GuiItem(48, Material.HOPPER, 1, ":hopper: &" + Style.THEME_HEX + "&lFILTER", List.of(
+                        "&8ʙᴜᴛᴛᴏɴ",
+                        " ",
+                        "&eⓘ Information ↓",
+                        "&7&l | &fSelect which bounties to show.",
+                        "{filters}",
+                        " ",
+                        "&" + Style.GOOD_HEX + "→ Click to Cycle ←"
+                ), null, false, List.of())),
+                cfg.getString("items.filter.selected-line", "&7&l | &f&" + Style.THEME_HEX + Style.BULLET + " {filter}"),
+                cfg.getString("items.filter.unselected-line", "&7&l | &f&" + Style.WHITE_HEX + Style.BULLET + " {filter}"),
+                readItem(cfg, "items.refresh", size, new GuiItem(49, Material.SKELETON_SKULL, 1, ":skeleton_skull: &" + Style.THEME_HEX + "&lREFRESH", List.of(
+                        "&8ʙᴜᴛᴛᴏɴ",
+                        " ",
+                        "&eⓘ Information ↓",
+                        "&7&l | &fRefreshes the current page.",
+                        " ",
+                        "&" + Style.GOOD_HEX + "→ Click to Refresh ←"
+                ), null, false, List.of())),
                 readButtonSlot(cfg, "items.search", size, 50),
                 readButtonSlot(cfg, "items.clear-search", size, 51),
-                readItem(cfg, "items.history", size, new GuiItem(47, Material.WRITABLE_BOOK, 1, "&" + Style.THEME_HEX + "History", List.of("&" + Style.WHITE_HEX + "View bounty claim/loss history"), null, false, List.of())),
+                readItem(cfg, "items.history", size, new GuiItem(47, Material.WRITABLE_BOOK, 1, ":writable_book: &" + Style.THEME_HEX + "&lHISTORY", List.of(
+                        "&8ʙᴜᴛᴛᴏɴ",
+                        " ",
+                        "&eⓘ Information ↓",
+                        "&7&l | &fView bounty claim and loss history.",
+                        " ",
+                        "&" + Style.GOOD_HEX + "→ Click to View History ←"
+                ), null, false, List.of())),
                 readButtonSlot(cfg, "items.back", size, 45),
                 readButtonSlot(cfg, "items.next", size, 53),
                 readItem(cfg, "bounty-item", size, new GuiItem(-1, Material.PLAYER_HEAD, 1, "&" + Style.THEME_HEX + "{player}", List.of(
-                        "&" + Style.WHITE_HEX + "Amount: &" + Style.THEME_HEX + "${amount}",
-                        "&" + Style.WHITE_HEX + "Set by:",
-                        "{contributions}"
+                        "&8ʙᴜᴛᴛᴏɴ",
+                        " ",
+                        "&eⓘ Information ↓",
+                        "&7&l | &fAmount: &" + Style.THEME_HEX + "${amount}",
+                        "&7&l | &fSet by:",
+                        "{contributions}",
+                        " ",
+                        "&" + Style.GOOD_HEX + "→ Click to View History ←"
                 ), null, false, List.of())),
-                cfg.getString("bounty-item.contribution-line", "&" + Style.WHITE_HEX + Style.BULLET + " &" + Style.THEME_HEX + "{setter} &" + Style.WHITE_HEX + "- &" + Style.THEME_HEX + "${amount}")
+                cfg.getString("bounty-item.contribution-line", "&7&l | &f&" + Style.THEME_HEX + Style.BULLET + " {setter} &" + Style.WHITE_HEX + "- &" + Style.THEME_HEX + "${amount}")
+        );
+    }
+
+    private static Map<String, ?> mainStyleReplacements() {
+        return Map.ofEntries(
+                Map.entry("items.info.name", "{theme}Info"),
+                Map.entry("items.info.lore", List.of(
+                        "{white}Use {theme}/bounty add <player> <amount>",
+                        "{white}Your bounty: {theme}${own_bounty}",
+                        "{white}Total earned: {theme}${total_earned}"
+                )),
+                Map.entry("items.filter.name", "{theme}Filter"),
+                Map.entry("items.filter.lore", List.of("{filters}")),
+                Map.entry("items.filter.selected-line", "{theme}• {filter}"),
+                Map.entry("items.filter.unselected-line", "{white}• {filter}"),
+                Map.entry("items.refresh.name", "{theme}Refresh"),
+                Map.entry("items.refresh.lore", List.of("{white}Click to refresh this page")),
+                Map.entry("items.history.name", "{theme}History"),
+                Map.entry("items.history.lore", List.of("{white}View bounty claim/loss history")),
+                Map.entry("bounty-item.name", "{theme}{player}"),
+                Map.entry("bounty-item.lore", List.of(
+                        "{white}Amount: {theme}${amount}",
+                        "{white}Set by:",
+                        "{contributions}"
+                )),
+                Map.entry("bounty-item.contribution-line", "{white}• {theme}{setter} {white}- {theme}${amount}")
         );
     }
 
