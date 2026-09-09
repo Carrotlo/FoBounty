@@ -2,6 +2,7 @@ package me.foesio.foBounty;
 
 import me.foesio.core.FoCoreContext;
 import me.foesio.core.FoPluginCore;
+import me.foesio.core.economy.VaultEconomyBridge;
 import me.foesio.core.dialog.ConfiguredTextDialogs;
 import me.foesio.core.dialog.DialogButton;
 import me.foesio.core.dialog.TextDialogRequest;
@@ -18,8 +19,6 @@ import me.foesio.foBounty.command.BountyAdminCommand;
 import me.foesio.foBounty.command.BountyCommand;
 import me.foesio.foBounty.config.GuiConfig;
 import me.foesio.foBounty.config.PluginSettings;
-import me.foesio.foBounty.economy.EconomyBridge;
-import me.foesio.foBounty.economy.EconomyBridgeFactory;
 import me.foesio.foBounty.gui.GuiManager;
 import me.foesio.foBounty.listener.GuiListener;
 import me.foesio.foBounty.listener.PlayerDeathListener;
@@ -152,8 +151,9 @@ public final class FoBounty extends JavaPlugin {
         }
     }
 
-    private EconomyBridge setupEconomy() {
-        return EconomyBridgeFactory.create(this);
+    private VaultEconomyBridge setupEconomy() {
+        VaultEconomyBridge economy = core.createVaultEconomy();
+        return economy.isAvailable() ? economy : null;
     }
 
     private FoReloadResult reloadAll() {

@@ -4,7 +4,7 @@ import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.core.sound.FoSoundService;
 import me.foesio.foBounty.config.PluginSettings;
 import me.foesio.foBounty.data.SQLiteStore;
-import me.foesio.foBounty.economy.EconomyBridge;
+import me.foesio.core.economy.VaultEconomyBridge;
 import me.foesio.foBounty.model.ActiveBounty;
 import me.foesio.foBounty.model.BountyContribution;
 import me.foesio.foBounty.model.BountyFilter;
@@ -137,7 +137,7 @@ public final class BountyService {
 
     private volatile SQLiteStore store;
     private volatile String databaseFile;
-    private EconomyBridge economy;
+    private VaultEconomyBridge economy;
 
     public BountyService(JavaPlugin plugin,
                          PluginSettings settings,
@@ -167,7 +167,7 @@ public final class BountyService {
         );
     }
 
-    public void setEconomy(EconomyBridge economy) {
+    public void setEconomy(VaultEconomyBridge economy) {
         this.economy = economy;
     }
 
