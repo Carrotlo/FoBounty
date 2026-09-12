@@ -452,7 +452,7 @@ public final class GuiManager {
                         Style.MUTED_HEX + "Current value: " + Style.THEME_HEX + current,
                         Style.MUTED_HEX + "Accepted range: " + Style.THEME_HEX + min
                                 + Style.MUTED_HEX + " to " + Style.THEME_HEX + max + Style.MUTED_HEX + ".",
-                        Style.MUTED_HEX + "Money values may use k, m, b, or t suffixes."
+                        Style.MUTED_HEX + "Money values may use compact suffixes from K through Td."
                 ),
                 Style.WHITE_HEX + "New value",
                 current,

@@ -162,7 +162,7 @@ public final class BountyCommand implements TabExecutor {
                     announce.put("target", target.getName());
                     announce.put("amount", Style.formatMoney(amount));
                     announce.put("total", Style.formatMoney(result.getTotal()));
-                    Bukkit.broadcastMessage(messages.render("add-announce", "add-announce", announce));
+                    messages.broadcastConfigured("add-announce", announce);
                 }
                 discordWebhookService.sendBountyCreated(player.getName(), target.getName(), amount, result.getTotal());
             }

@@ -145,7 +145,7 @@ public final class PlayerDeathListener implements Listener {
                 announce.put("killer", killer.getName());
                 announce.put("amount", Style.formatMoney(result.getAmount()));
                 announce.put("target", result.getTargetName());
-                Bukkit.broadcastMessage(messages.render("claim-announce", "claim-announce", announce));
+                messages.broadcastConfigured("claim-announce", announce);
             }
             return;
         }

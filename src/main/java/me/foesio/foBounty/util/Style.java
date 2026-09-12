@@ -3,11 +3,11 @@ package me.foesio.foBounty.util;
 import me.foesio.core.gui.GuiTitles;
 import me.foesio.core.message.FoStyle;
 import me.foesio.core.number.LargeNumberParser;
+import me.foesio.core.number.NumberFormatters;
 import me.foesio.core.text.FoText;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.DecimalFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -20,7 +20,6 @@ public final class Style {
     public static final String BAD_HEX = FoStyle.BAD;
     public static final String BULLET = "\u2022";
 
-    private static final DecimalFormat COMPACT_DECIMAL = new DecimalFormat("0.#");
     private static final DateTimeFormatter TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
@@ -45,27 +44,7 @@ public final class Style {
     }
 
     public static String formatMoney(long amount) {
-        if (amount < 1000L) {
-            return String.valueOf(amount);
-        }
-        double value = amount;
-        String suffix = "";
-        if (amount >= 1_000_000_000_000L) {
-            value = value / 1_000_000_000_000L;
-            suffix = "t";
-        } else if (amount >= 1_000_000_000L) {
-            value = value / 1_000_000_000L;
-            suffix = "b";
-        } else if (amount >= 1_000_000L) {
-            value = value / 1_000_000L;
-            suffix = "m";
-        } else if (amount >= 1_000L) {
-            value = value / 1_000L;
-            suffix = "k";
-        }
-        synchronized (COMPACT_DECIMAL) {
-            return COMPACT_DECIMAL.format(value) + suffix;
-        }
+        return NumberFormatters.compact(amount);
     }
 
     public static Long parseAmount(String input) {

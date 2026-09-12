@@ -11,7 +11,7 @@ tokens:
 no-permission: "{prefix}{bad}You don't have permission."
 player-only: "{prefix}{bad}Only players can do this."
 unknown-player: "{prefix}{bad}Player {theme}{player}{bad} was not found in cache/online players."
-invalid-number: "{prefix}{bad}Invalid amount. Use a number or suffix (k/m/b/t)."
+invalid-number: "{prefix}{bad}Invalid amount. Use a number or a compact suffix from K through Td."
 self-bounty: "{prefix}{bad}You cannot place a bounty on yourself."
 amount-too-low: "{prefix}{bad}Minimum bounty is {theme}${min}{bad}."
 amount-too-high: "{prefix}{bad}Maximum bounty is {theme}${max}{bad}."
