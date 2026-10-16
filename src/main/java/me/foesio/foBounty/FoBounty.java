@@ -3,11 +3,9 @@ package me.foesio.foBounty;
 import me.foesio.core.FoCoreContext;
 import me.foesio.core.FoPluginCore;
 import me.foesio.core.economy.VaultEconomyBridge;
-import me.foesio.core.dialog.ConfiguredTextDialogs;
-import me.foesio.core.dialog.DialogButton;
-import me.foesio.core.dialog.TextDialogRequest;
 import me.foesio.core.message.FoMessageMigrations;
 import me.foesio.core.message.FoMessageService;
+import me.foesio.core.gui.publicgui.PublicGuiService;
 import me.foesio.core.reload.FoReloadRegistry;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.core.sound.FoAdminSounds;
@@ -17,9 +15,12 @@ import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foBounty.command.BountyAdminCommand;
 import me.foesio.foBounty.command.BountyCommand;
-import me.foesio.foBounty.config.GuiConfig;
+import me.foesio.foBounty.config.PublicGuiUpgrade;
+import me.foesio.foBounty.config.DisplayFormats;
 import me.foesio.foBounty.config.PluginSettings;
 import me.foesio.foBounty.gui.GuiManager;
+import me.foesio.foBounty.gui.PublicBountyGuis;
+import me.foesio.foBounty.input.SearchInputService;
 import me.foesio.foBounty.listener.GuiListener;
 import me.foesio.foBounty.listener.PlayerDeathListener;
 import me.foesio.foBounty.listener.PlayerJoinListener;
@@ -28,17 +29,27 @@ import me.foesio.foBounty.service.DiscordWebhookService;
 import me.foesio.foBounty.service.FoTeamsHookService;
 import me.foesio.foBounty.service.PlayerLookupService;
 import me.foesio.foBounty.util.CooldownService;
+import me.foesio.foBounty.util.BountyMessages;
 import me.foesio.foBounty.util.Style;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Consumer;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.InvalidConfigurationException;
 
 public final class FoBounty extends JavaPlugin {
     private static final String UPDATE_PROJECT_ID = "fobounty";
@@ -53,35 +64,74 @@ public final class FoBounty extends JavaPlugin {
     private FoEditorSounds editorSounds;
     private FoGuiSounds guiSounds;
     private FoAdminSounds adminSounds;
-    private ConfiguredTextDialogs textDialogs;
-    private GuiConfig guiConfig;
+    private SearchInputService searchInputs;
+    private PublicGuiService publicGuis;
     private BountyService bountyService;
+    private DiscordWebhookService discordWebhookService;
     private GuiManager guiManager;
     private PlayerLookupService playerLookupService;
 
     @Override
     public void onEnable() {
+        boolean freshInstall = !getDataFolder().exists();
         settings.load(this);
         core = createCoreContext();
-        sounds = core.createSounds();
+        int oldSchemaVersion = core.migrations().version();
+        LegacyMessageSelection messageSelection = LegacyMessageSelection.unchanged();
+        boolean migrationReady = true;
+        try {
+            messageSelection = selectLegacyMessages(getDataFolder().toPath(), oldSchemaVersion);
+        } catch (IOException error) {
+            migrationReady = false;
+            getLogger().severe("Public UI migration cannot select the older message file: " + error.getMessage());
+        }
+        boolean releasedFlatMessages = migrationReady && oldSchemaVersion < PublicGuiUpgrade.VERSION
+                && flatLegacyMessagesInstalled();
+        if (freshInstall || (releasedFlatMessages && !Files.exists(getDataFolder().toPath().resolve("sounds.yml")))) {
+            saveResource("sounds.yml", false);
+        }
+        if (freshInstall) {
+            saveResource("messages.yml", false);
+        }
+        sounds = FoSoundService.loadPreservingRemovals(this);
         editorSounds = FoEditorSounds.create(sounds);
         guiSounds = FoGuiSounds.create(sounds);
         adminSounds = FoAdminSounds.create(sounds);
         core.warnIfNativeDialogsUnavailable();
         startMetrics(core);
-        copyLegacyMessageFileIfNeeded();
-        messages = FoMessageService.load(this, messageMigrations());
-        migrateSprites();
+        boolean messagesExistedBeforeUpgrade = Files.isRegularFile(getDataFolder().toPath().resolve("messages.yml"));
+        byte[] originalMessages = null;
+        if (migrationReady) {
+            try {
+                originalMessages = snapshotMessagesBeforeUpgrade(freshInstall);
+            } catch (IOException error) {
+                migrationReady = false;
+                getLogger().severe("Public UI migration cannot back up messages.yml: " + error.getMessage());
+                restoreMessagesAfterFailedUpgrade(null, messageSelection);
+            }
+        }
+        boolean flatLegacyMessages = migrationReady && flatLegacyMessagesInstalled();
+        messages = FoMessageService.loadPreservingRemovals(this,
+                migrationReady && core.migrations().version() < PublicGuiUpgrade.VERSION
+                        ? messageMigrations(flatLegacyMessages) : FoMessageMigrations.none());
+        if (migrationReady && oldSchemaVersion < PublicGuiUpgrade.VERSION
+                && !messagesMigrationPersisted(messagesExistedBeforeUpgrade)) {
+            migrationReady = false;
+            getLogger().severe("Public UI migration cannot confirm messages.yml was saved; schema version remains pending.");
+            restoreMessagesAfterFailedUpgrade(originalMessages, messageSelection);
+        }
+        DisplayFormats.installFreshDefault(this, core.migrations().version());
+        DisplayFormats.reload(this);
+        if (migrationReady && !PublicGuiUpgrade.installOrUpgrade(this, core.migrations(), freshInstall, originalMessages)) {
+            restoreMessagesAfterFailedUpgrade(originalMessages, messageSelection);
+        }
+        messages = FoMessageService.loadPreservingRemovals(this, FoMessageMigrations.none());
         UpdateNoticeService updates = core.createUpdateNotices(messages, UPDATE_PROJECT_ID, adminSounds).start();
-        textDialogs = ConfiguredTextDialogs.create(this)
-                .register("search", searchDialogFallback());
-        textDialogs.load();
-        guiConfig = new GuiConfig(this);
-        guiConfig.load();
+        searchInputs = new SearchInputService(this, messages, core.textInputService().support());
         playerLookupService = new PlayerLookupService();
         playerLookupService.rebuildIndex();
         FoTeamsHookService foTeamsHookService = new FoTeamsHookService(this);
-        DiscordWebhookService discordWebhookService = new DiscordWebhookService(this);
+        discordWebhookService = new DiscordWebhookService(this, oldSchemaVersion);
 
         bountyService = new BountyService(this, settings, playerLookupService, foTeamsHookService, core.scheduler(), sounds);
         bountyService.setEconomy(setupEconomy());
@@ -94,8 +144,12 @@ public final class FoBounty extends JavaPlugin {
         }
 
         CooldownService cooldownService = new CooldownService();
-        guiManager = new GuiManager(this, settings, messages, guiConfig, bountyService, cooldownService,
-                core.textInputService(), textDialogs, core.inventoryCloseSuppressor(), core.scheduler(), editorSounds, guiSounds);
+        guiManager = new GuiManager(this, settings, messages, bountyService, cooldownService,
+                core.textInputService(), searchInputs, core.inventoryCloseSuppressor(), core.scheduler(), editorSounds, guiSounds);
+        publicGuis = PublicBountyGuis.create(this, guiManager);
+        guiManager.setPublicGuis(publicGuis);
+        publicGuis.start();
+        publicGuis.reload();
 
         BountyCommand bountyCommand = new BountyCommand(
                 settings,
@@ -142,6 +196,14 @@ public final class FoBounty extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (searchInputs != null) {
+            searchInputs.close();
+            searchInputs = null;
+        }
+        if (publicGuis != null) {
+            publicGuis.close();
+            publicGuis = null;
+        }
         if (bountyService != null) {
             bountyService.shutdown();
         }
@@ -160,13 +222,25 @@ public final class FoBounty extends JavaPlugin {
         FoReloadResult result = FoReloadRegistry.create()
                 .add("settings", () -> settings.load(this))
                 .add("storage", bountyService::reloadStorageIfNeeded)
-                .add("sounds", sounds::reload)
-                .addMessages(messages)
+                .add("formats", () -> {
+                    if (!DisplayFormats.reload(this)) throw new IllegalStateException("Invalid formats.yml");
+                })
+                .add("sounds", () -> {
+                    if (!sounds.reloadChecked()) throw new IllegalStateException("Invalid sounds.yml");
+                })
+                .add("messages", () -> {
+                    BountyMessages.validateInstalled(this);
+                    messages.reload();
+                })
+                .add("webhook", () -> {
+                    if (!discordWebhookService.reload()) throw new IllegalStateException("Invalid webhook.yml");
+                })
                 .add("core", this::reloadCoreContext)
-                .add("dialogs", textDialogs::reload)
+                .add("dialogs", () -> {
+                    if (!searchInputs.reload()) throw new IllegalStateException("Invalid dialogs/search.yml");
+                })
                 .add("guis", () -> {
-                    guiConfig.load();
-                    guiManager.setGuiConfig(guiConfig);
+                    if (!publicGuis.reload().successful()) throw new IllegalStateException("Invalid public GUI file; previous menus remain active");
                 })
                 .add("player-index", () -> {
                     playerLookupService.rebuildIndex();
@@ -208,42 +282,96 @@ public final class FoBounty extends JavaPlugin {
         if (guiManager != null) {
             guiManager.setDialogServices(core.textInputService(), core.inventoryCloseSuppressor());
         }
+        if (searchInputs != null) searchInputs.setSupport(core.textInputService().support());
         if (previous != null) {
             previous.close();
         }
         startMetrics(core);
     }
 
-    private void copyLegacyMessageFileIfNeeded() {
-        File current = new File(getDataFolder(), "messages.yml");
-        File legacy = new File(getDataFolder(), "message.yml");
-        if (current.exists() || !legacy.exists()) {
-            return;
+    static LegacyMessageSelection selectLegacyMessages(Path root, int oldSchemaVersion) throws IOException {
+        if (oldSchemaVersion >= PublicGuiUpgrade.VERSION) return LegacyMessageSelection.unchanged();
+        Path legacy = root.resolve("message.yml");
+        Path current = root.resolve("messages.yml");
+        if (!Files.exists(legacy)) return LegacyMessageSelection.unchanged();
+        if (Files.isSymbolicLink(legacy) || !Files.isRegularFile(legacy)
+                || Files.isSymbolicLink(current) || (Files.exists(current) && !Files.isRegularFile(current))) {
+            throw new IOException("Unsafe legacy or current message file");
         }
-        try {
-            File parent = current.getParentFile();
-            if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                getLogger().warning("Could not create plugin data folder for messages.yml");
-                return;
+        byte[] before = Files.isRegularFile(current) ? Files.readAllBytes(current) : null;
+        if (before != null) {
+            YamlConfiguration currentYaml = strictMessageYaml(before, "messages.yml");
+            if (currentYaml.contains("tokens", true)) {
+                Path backup = current.resolveSibling("messages.yml.gui-v" + oldSchemaVersion + "-backup");
+                if (oldSchemaVersion > 1 || Files.isRegularFile(backup)) {
+                    return LegacyMessageSelection.unchanged(); // A prior Core release or migration owns this shape.
+                }
+                throw new IOException("Both message.yml and new-format messages.yml exist without migration history;"
+                        + " cannot determine which owner file is active");
             }
-            Files.copy(legacy.toPath(), current.toPath());
-            getLogger().info("Copied legacy message.yml to messages.yml so existing message edits are preserved.");
-        } catch (IOException exception) {
-            getLogger().warning("Could not copy legacy message.yml to messages.yml: " + exception.getMessage());
+        }
+        byte[] activeLegacy = Files.readAllBytes(legacy);
+        strictMessageYaml(activeLegacy, "message.yml");
+        if (java.util.Arrays.equals(before, activeLegacy)) return LegacyMessageSelection.unchanged();
+        Files.createDirectories(root);
+        if (before != null) {
+            Path backup = current.resolveSibling("messages.yml.gui-v" + oldSchemaVersion + "-backup");
+            if (Files.exists(backup) && (Files.isSymbolicLink(backup) || !Files.isRegularFile(backup))) {
+                throw new IOException("Unsafe messages.yml migration backup");
+            }
+            if (!Files.exists(backup)) writeNewFileAtomically(backup, before);
+        }
+        replaceMessageBytes(current, activeLegacy);
+        return new LegacyMessageSelection(true, before);
+    }
+
+    private static YamlConfiguration strictMessageYaml(byte[] bytes, String name) throws IOException {
+        YamlConfiguration yaml = new YamlConfiguration();
+        try {
+            yaml.loadFromString(new String(bytes, StandardCharsets.UTF_8));
+        } catch (InvalidConfigurationException error) {
+            throw new IOException(name + " cannot be parsed: " + error.getMessage(), error);
+        }
+        return yaml;
+    }
+
+    private static void writeNewFileAtomically(Path target, byte[] bytes) throws IOException {
+        Path stage = Files.createTempFile(target.getParent(), ".bounty-message-", ".staged");
+        try {
+            Files.write(stage, bytes);
+            try {
+                Files.move(stage, target, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(stage, target);
+            }
+        } finally {
+            Files.deleteIfExists(stage);
         }
     }
 
-    private FoMessageMigrations messageMigrations() {
+    private static void replaceMessageBytes(Path target, byte[] bytes) throws IOException {
+        Path stage = Files.createTempFile(target.getParent(), ".bounty-message-", ".staged");
+        try {
+            Files.write(stage, bytes);
+            try {
+                Files.move(stage, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(stage, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(stage);
+        }
+    }
+
+    private FoMessageMigrations messageMigrations(boolean flatLegacyMessages) {
         return FoMessageMigrations.create()
+                .add(config -> moveLegacyPrefix(config, bundledMessageText("tokens.prefix"),
+                        getLogger()::warning))
                 .add(config -> {
-                    String legacyPrefix = config.getString("prefix");
-                    if (legacyPrefix == null) {
-                        return false;
-                    }
-                    config.set("tokens.prefix", legacyPrefix);
-                    config.set("prefix", null);
-                    return true;
+                    return refreshKnownMessageDefaults(config);
                 })
+                .add(config -> seedNewMessageFields(config, flatLegacyMessages))
+                .add(this::repairInvalidLegacyMessages)
                 .add(config -> {
                     boolean changed = false;
                     changed |= setMessageDefault(config, "editor.saved",
@@ -304,32 +432,207 @@ public final class FoBounty extends JavaPlugin {
                 .build();
     }
 
+    private boolean refreshKnownMessageDefaults(FileConfiguration config) {
+        try (InputStream previousStream = getResource("gui-legacy/v1/message.yml");
+             InputStream newestStream = getResource("messages.yml")) {
+            if (previousStream == null || newestStream == null) return false;
+            YamlConfiguration previous = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(previousStream, StandardCharsets.UTF_8));
+            YamlConfiguration newest = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(newestStream, StandardCharsets.UTF_8));
+            boolean changed = false;
+            if (Objects.equals(config.getString("tokens.prefix"), previous.getString("prefix"))) {
+                config.set("tokens.prefix", newest.getString("tokens.prefix"));
+                changed = true;
+            }
+            for (String path : previous.getKeys(true)) {
+                if (path.equals("prefix") || !newest.isSet(path) || !config.isSet(path)
+                        || !Objects.deepEquals(config.get(path), previous.get(path))) continue;
+                config.set(path, newest.get(path));
+                changed = true;
+            }
+            return changed;
+        } catch (IOException error) {
+            getLogger().warning("Could not compare older message defaults: " + error.getMessage());
+            return false;
+        }
+    }
+
+    private String bundledMessageText(String path) {
+        try (InputStream stream = getResource("messages.yml")) {
+            if (stream == null) return null;
+            YamlConfiguration bundled = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(stream, StandardCharsets.UTF_8));
+            return bundled.getString(path);
+        } catch (IOException error) {
+            getLogger().warning("Could not read bundled messages.yml: " + error.getMessage());
+            return null;
+        }
+    }
+
+    static boolean moveLegacyPrefix(FileConfiguration config, String newestPrefix, Consumer<String> warning) {
+        if (config.isString("tokens.prefix") || !config.contains("prefix", true)) return false;
+        Object oldPrefix = config.get("prefix");
+        String legacyPrefix = oldPrefix instanceof String text ? text : newestPrefix;
+        if (legacyPrefix == null) return false;
+        if (!(oldPrefix instanceof String)) {
+            warning.accept("Legacy messages.yml:prefix=" + oldPrefix
+                    + " is invalid; using newest bundled default " + legacyPrefix);
+        }
+        if (config.contains("tokens", true) && !config.isConfigurationSection("tokens")) {
+            config.set("tokens", null);
+        }
+        config.set("tokens.prefix", legacyPrefix);
+        config.set("prefix", null);
+        return true;
+    }
+
+    private boolean repairInvalidLegacyMessages(FileConfiguration config) {
+        try (InputStream stream = getResource("messages.yml")) {
+            if (stream == null) return false;
+            YamlConfiguration newest = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(stream, StandardCharsets.UTF_8));
+            boolean changed = false;
+            for (String path : newest.getKeys(true)) {
+                if (newest.isConfigurationSection(path) || !config.contains(path, true)) continue;
+                Object value = config.get(path);
+                boolean valid = value instanceof String || (!path.startsWith("tokens.")
+                        && value instanceof List<?> list && list.stream().allMatch(String.class::isInstance));
+                if (valid) continue;
+                getLogger().warning("Legacy messages.yml:" + path + "=" + value
+                        + " is invalid; using newest bundled default " + newest.get(path));
+                config.set(path, newest.get(path));
+                changed = true;
+            }
+            return changed;
+        } catch (IOException error) {
+            getLogger().warning("Could not validate older messages.yml: " + error.getMessage());
+            return false;
+        }
+    }
+
+    private boolean seedNewMessageFields(FileConfiguration config, boolean flatLegacyMessages) {
+        try (InputStream stream = getResource("messages.yml")) {
+            if (stream == null) return false;
+            YamlConfiguration newest = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(stream, StandardCharsets.UTF_8));
+            return seedNewMessageFields(config, newest, flatLegacyMessages);
+        } catch (IOException error) {
+            getLogger().warning("Could not install newly introduced message fields: " + error.getMessage());
+            return false;
+        }
+    }
+
+    static boolean seedNewMessageFields(FileConfiguration config, FileConfiguration newest,
+                                        boolean flatLegacyMessages) {
+        // A retry can have an old migration version but an already updated messages.yml.
+        // Only a released flat message file proves these keys were never available.
+        if (!flatLegacyMessages) return false;
+        List<String> introduced = List.of("gui-unavailable", "search-empty",
+                "history-labels.unknown-player", "history-labels.reasons.PVP",
+                "history-labels.reasons.NATURAL_DEATH",
+                "tokens.theme", "tokens.muted", "tokens.white", "tokens.good", "tokens.bad",
+                "claim-failed", "reload-failed", "admin-remove-failed");
+        boolean changed = false;
+        for (String path : introduced) {
+            if (config.contains(path, true) || !newest.contains(path, true)) continue;
+            config.set(path, newest.get(path));
+            changed = true;
+        }
+        return changed;
+    }
+
+    private boolean flatLegacyMessagesInstalled() {
+        Path file = getDataFolder().toPath().resolve("messages.yml");
+        if (!Files.isRegularFile(file)) return false;
+        try {
+            YamlConfiguration yaml = new YamlConfiguration();
+            yaml.loadFromString(Files.readString(file));
+            return yaml.contains("prefix", true) && !yaml.contains("tokens", true);
+        } catch (IOException | InvalidConfigurationException error) {
+            return false;
+        }
+    }
+
+    private byte[] snapshotMessagesBeforeUpgrade(boolean freshInstall) throws IOException {
+        if (freshInstall || core.migrations().version() >= PublicGuiUpgrade.VERSION) return null;
+        Path file = getDataFolder().toPath().resolve("messages.yml");
+        if (!Files.isRegularFile(file)) return null;
+        byte[] bytes = Files.readAllBytes(file);
+        try {
+            new YamlConfiguration().loadFromString(new String(bytes, StandardCharsets.UTF_8));
+        } catch (InvalidConfigurationException error) {
+            throw new IOException("messages.yml cannot be parsed: " + error.getMessage(), error);
+        }
+        Path backup = file.resolveSibling(file.getFileName() + ".gui-v"
+                + core.migrations().version() + "-backup");
+        if (!Files.exists(backup)) {
+            Path stage = Files.createTempFile(file.getParent(), ".bounty-message-backup-", ".staged");
+            try {
+                Files.write(stage, bytes);
+                try {
+                    Files.move(stage, backup, StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                    Files.move(stage, backup);
+                }
+            } finally {
+                Files.deleteIfExists(stage);
+            }
+        }
+        return bytes;
+    }
+
+    private void restoreMessagesAfterFailedUpgrade(byte[] original, LegacyMessageSelection selection) {
+        Path file = getDataFolder().toPath().resolve("messages.yml");
+        try {
+            restoreMessageFile(file, original, selection);
+        } catch (IOException error) {
+            getLogger().severe("Could not restore messages.yml after failed GUI migration: " + error.getMessage());
+        }
+    }
+
+    static void restoreMessageFile(Path file, byte[] original, LegacyMessageSelection selection) throws IOException {
+        byte[] rollback = selection.changed() ? selection.previousCurrent() : original;
+        if (rollback == null && !selection.changed()) return;
+        if (rollback == null) Files.deleteIfExists(file);
+        else replaceMessageBytes(file, rollback);
+    }
+
+    record LegacyMessageSelection(boolean changed, byte[] previousCurrent) {
+        static LegacyMessageSelection unchanged() {
+            return new LegacyMessageSelection(false, null);
+        }
+    }
+
+    private boolean messagesMigrationPersisted(boolean originallyPresent) {
+        Path file = getDataFolder().toPath().resolve("messages.yml");
+        if (!originallyPresent) return !Files.exists(file);
+        if (!Files.isRegularFile(file)) return false;
+        try {
+            YamlConfiguration disk = new YamlConfiguration();
+            disk.loadFromString(Files.readString(file));
+            Set<String> leaves = new java.util.HashSet<>();
+            for (String path : messages.config().getKeys(true)) {
+                if (!messages.config().isConfigurationSection(path)) leaves.add(path);
+            }
+            for (String path : disk.getKeys(true)) {
+                if (!disk.isConfigurationSection(path)) leaves.add(path);
+            }
+            for (String path : leaves) {
+                if (!Objects.deepEquals(messages.config().get(path), disk.get(path))) return false;
+            }
+            return true;
+        } catch (IOException | InvalidConfigurationException error) {
+            return false;
+        }
+    }
+
     private boolean setMessageDefault(FileConfiguration config, String path, String value) {
         if (config.isSet(path)) {
             return false;
         }
         config.set(path, value);
         return true;
-    }
-
-    private void migrateSprites() {
-        messages.migrateToVersion(core.migrations(), 1, config -> {
-            boolean changed = false;
-            changed |= FoMessageService.addMissingToken(config, "tokens.prefix", ":gold_nugget:", null);
-            changed |= FoMessageService.addMissingToken(config, "add-success", ":emerald:");
-            changed |= FoMessageService.addMissingToken(config, "add-failed", ":redstone:");
-            changed |= FoMessageService.addMissingToken(config, "admin-remove-success", ":emerald:");
-            changed |= FoMessageService.addMissingToken(config, "admin-remove-failed", ":redstone:");
-            changed |= FoMessageService.addMissingToken(config, "reload-success", ":emerald:");
-            changed |= FoMessageService.addMissingToken(config, "reload-failed", ":redstone:");
-            changed |= FoMessageService.addMissingToken(config, "claim-reward", ":emerald:");
-            changed |= FoMessageService.addMissingToken(config, "claim-failed", ":redstone:");
-            changed |= FoMessageService.addMissingToken(config, "editor-saved", ":emerald:");
-            changed |= FoMessageService.addMissingToken(config, "editor-invalid", ":redstone:");
-            changed |= FoMessageService.addMissingToken(config, "editor.opened", ":book:");
-            changed |= FoMessageService.addMissingToken(config, "editor.deleted", ":lava_bucket:");
-            return true;
-        });
     }
 
     private void registerPlaceholders() {
@@ -364,25 +667,5 @@ public final class FoBounty extends JavaPlugin {
         return bountyService.getCurrentBounty(player.getUniqueId());
     }
 
-    private TextDialogRequest searchDialogFallback() {
-        return new TextDialogRequest(
-                Style.THEME_HEX + "Search",
-                List.of(
-                        Style.MUTED_HEX + "Enter a player name to filter active bounties.",
-                        Style.MUTED_HEX + "Use cancel to return without changing the search."
-                ),
-                Style.WHITE_HEX + "Player name",
-                "{current}",
-                "",
-                DialogButton.search("Search", "", 100),
-                DialogButton.cancel("Cancel", "", 100),
-                300,
-                300,
-                32,
-                true,
-                false,
-                false
-        );
-    }
 
 }

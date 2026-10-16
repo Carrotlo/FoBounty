@@ -1,0 +1,8 @@
+# Server-wide presentation for bounty amounts and times.
+# Use a BCP 47 language tag and a Java time-zone ID, or "system" for the server zone.
+locale: en-US
+time-zone: system
+timestamp-pattern: "yyyy-MM-dd HH:mm"
+compact:
+  decimal-pattern: "0.00"
+  suffixes: ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td"]

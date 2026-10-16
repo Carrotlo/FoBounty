@@ -1,5 +1,6 @@
 package me.foesio.foBounty.command;
 
+import me.foesio.foBounty.util.BountyMessages;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.sound.FoAdminSounds;
 import me.foesio.core.sound.FoSoundService;
@@ -60,12 +61,12 @@ public final class BountyCommand implements TabExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("fobounty.use")) {
-            messages.send(sender, "no-permission", "no-permission");
+            BountyMessages.send(messages, sender, "no-permission", "no-permission");
             adminSounds.updateError(sender);
             return true;
         }
         if (!(sender instanceof Player player)) {
-            messages.send(sender, "player-only", "player-only");
+            BountyMessages.send(messages, sender, "player-only", "player-only");
             return true;
         }
 
@@ -101,31 +102,31 @@ public final class BountyCommand implements TabExecutor {
         OfflinePlayer target = playerLookupService.findExact(args[1]);
         if (target == null || target.getName() == null) {
             Map<String, String> replacements = Map.of("player", args[1]);
-            messages.send(player, "unknown-player", "unknown-player", replacements);
+            BountyMessages.send(messages, player, "unknown-player", "unknown-player", replacements);
             playAddError(player);
             return true;
         }
         if (target.getUniqueId().equals(player.getUniqueId())) {
-            messages.send(player, "self-bounty", "self-bounty");
+            BountyMessages.send(messages, player, "self-bounty", "self-bounty");
             playAddError(player);
             return true;
         }
         long amount;
         Long parsedAmount = Style.parseAmount(args[2]);
         if (parsedAmount == null) {
-            messages.send(player, "invalid-number", "invalid-number");
+            BountyMessages.send(messages, player, "invalid-number", "invalid-number");
             playAddError(player);
             return true;
         }
         amount = parsedAmount;
 
         if (amount < settings.getMinPrice()) {
-            messages.send(player, "amount-too-low", "amount-too-low", Map.of("min", Style.formatMoney(settings.getMinPrice())));
+            BountyMessages.send(messages, player, "amount-too-low", "amount-too-low", Map.of("min", Style.formatMoney(settings.getMinPrice())));
             playAddError(player);
             return true;
         }
         if (amount > settings.getMaxPrice()) {
-            messages.send(player, "amount-too-high", "amount-too-high", Map.of("max", Style.formatMoney(settings.getMaxPrice())));
+            BountyMessages.send(messages, player, "amount-too-high", "amount-too-high", Map.of("max", Style.formatMoney(settings.getMaxPrice())));
             playAddError(player);
             return true;
         }
@@ -137,15 +138,15 @@ public final class BountyCommand implements TabExecutor {
         BountyService.AddResult result = bountyService.addBounty(player, target, amount);
         switch (result.getStatus()) {
             case NO_ECONOMY -> {
-                messages.send(player, "no-economy", "no-economy");
+                BountyMessages.send(messages, player, "no-economy", "no-economy");
                 playAddError(player);
             }
             case NO_MONEY -> {
-                messages.send(player, "not-enough-money", "not-enough-money");
+                BountyMessages.send(messages, player, "not-enough-money", "not-enough-money");
                 playAddError(player);
             }
             case FAILURE -> {
-                messages.send(player, "add-failed", "add-failed");
+                BountyMessages.send(messages, player, "add-failed", "add-failed");
                 playAddError(player);
             }
             case SUCCESS -> {
@@ -153,7 +154,7 @@ public final class BountyCommand implements TabExecutor {
                 replacements.put("amount", Style.formatMoney(amount));
                 replacements.put("player", target.getName());
                 replacements.put("total", Style.formatMoney(result.getTotal()));
-                messages.send(player, "add-success", "add-success", replacements);
+                BountyMessages.send(messages, player, "add-success", "add-success", replacements);
                 if (settings.isBountySetAnnounceEnabled()
                         && (settings.getBountySetAnnounceMinimumAmount() < 0
                         || amount >= settings.getBountySetAnnounceMinimumAmount())) {
@@ -162,7 +163,7 @@ public final class BountyCommand implements TabExecutor {
                     announce.put("target", target.getName());
                     announce.put("amount", Style.formatMoney(amount));
                     announce.put("total", Style.formatMoney(result.getTotal()));
-                    messages.broadcastConfigured("add-announce", announce);
+                    BountyMessages.broadcast(messages, "add-announce", announce);
                 }
                 discordWebhookService.sendBountyCreated(player.getName(), target.getName(), amount, result.getTotal());
             }
@@ -184,7 +185,7 @@ public final class BountyCommand implements TabExecutor {
         if (args.length >= 2) {
             target = playerLookupService.findExact(args[1]);
             if (target == null || target.getName() == null) {
-                messages.send(player, "unknown-player", "unknown-player", Map.of("player", args[1]));
+                BountyMessages.send(messages, player, "unknown-player", "unknown-player", Map.of("player", args[1]));
                 adminSounds.updateError(player);
                 return true;
             }
@@ -201,22 +202,22 @@ public final class BountyCommand implements TabExecutor {
         if (!viewer.isOnline()) {
             return;
         }
-        Map<String, String> headerMap = Map.of("player", safeName(target.getName(), "Unknown"));
-        messages.send(viewer, "history-header", "history-header", headerMap);
+        Map<String, String> headerMap = Map.of("player", safeName(target.getName(), historyLabel("unknown-player")));
+        BountyMessages.send(messages, viewer, "history-header", "history-header", headerMap);
         if (history.isEmpty()) {
-            messages.send(viewer, "history-empty", "history-empty", headerMap);
+            BountyMessages.send(messages, viewer, "history-empty", "history-empty", headerMap);
             return;
         }
         for (BountyHistoryEntry entry : history) {
             Map<String, String> replacements = new HashMap<>();
             replacements.put("time", Style.formatTimestamp(entry.getOccurredAt()));
             replacements.put("amount", Style.formatMoney(entry.getAmount()));
-            replacements.put("target", safeName(entry.getRelatedName(), "Unknown"));
-            replacements.put("reason", entry.getReason());
+            replacements.put("target", safeName(entry.getRelatedName(), historyLabel("unknown-player")));
+            replacements.put("reason", historyReason(entry.getReason()));
             if (entry.getType() == HistoryType.CLAIMED) {
-                messages.send(viewer, "history-line-claimed", "history-line-claimed", replacements);
+                BountyMessages.send(messages, viewer, "history-line-claimed", "history-line-claimed", replacements);
             } else {
-                messages.send(viewer, "history-line-lost", "history-line-lost", replacements);
+                BountyMessages.send(messages, viewer, "history-line-lost", "history-line-lost", replacements);
             }
         }
     }
@@ -226,6 +227,15 @@ public final class BountyCommand implements TabExecutor {
             return fallback;
         }
         return name;
+    }
+
+    private String historyLabel(String key) {
+        return messages.config().getString("history-labels." + key, "");
+    }
+
+    private String historyReason(String code) {
+        if (code == null || !code.matches("[A-Z_]+")) return "";
+        return historyLabel("reasons." + code);
     }
 
     @Override

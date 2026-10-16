@@ -3,14 +3,11 @@ package me.foesio.foBounty.util;
 import me.foesio.core.gui.GuiTitles;
 import me.foesio.core.message.FoStyle;
 import me.foesio.core.number.LargeNumberParser;
-import me.foesio.core.number.NumberFormatters;
+import me.foesio.foBounty.config.DisplayFormats;
 import me.foesio.core.text.FoText;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
 public final class Style {
     public static final String THEME_HEX = FoStyle.THEME;
@@ -19,9 +16,6 @@ public final class Style {
     public static final String GOOD_HEX = FoStyle.GOOD;
     public static final String BAD_HEX = FoStyle.BAD;
     public static final String BULLET = "\u2022";
-
-    private static final DateTimeFormatter TIME_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     private Style() {
     }
@@ -44,7 +38,7 @@ public final class Style {
     }
 
     public static String formatMoney(long amount) {
-        return NumberFormatters.compact(amount);
+        return DisplayFormats.money(amount);
     }
 
     public static Long parseAmount(String input) {
@@ -61,6 +55,6 @@ public final class Style {
     }
 
     public static String formatTimestamp(long epochMillis) {
-        return TIME_FORMATTER.format(Instant.ofEpochMilli(epochMillis));
+        return DisplayFormats.timestamp(epochMillis);
     }
 }

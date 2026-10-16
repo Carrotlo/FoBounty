@@ -3,66 +3,80 @@ package me.foesio.foBounty.service;
 import me.foesio.core.discord.DiscordWebhookEmbed;
 import me.foesio.core.discord.DiscordWebhookField;
 import me.foesio.core.discord.DiscordWebhookSettings;
+import me.foesio.foBounty.config.WebhookPresentation;
 import me.foesio.foBounty.util.Style;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 public final class DiscordWebhookService {
-    private static final int EMBED_COLOR = 261256; // #03fc88
     private final me.foesio.core.discord.DiscordWebhookService client;
+    private final WebhookPresentation presentation;
 
-    public DiscordWebhookService(JavaPlugin plugin) {
+    public DiscordWebhookService(JavaPlugin plugin, int oldSchemaVersion) {
+        this.presentation = new WebhookPresentation(plugin, oldSchemaVersion);
         this.client = me.foesio.core.discord.DiscordWebhookService.create(
                 plugin,
                 () -> DiscordWebhookSettings.fromConfig(plugin.getConfig(), "")
         );
     }
 
+    public boolean reload() {
+        return presentation.reload();
+    }
+
     public void sendBountyCreated(String setterName, String targetName, long amount, long total) {
+        WebhookPresentation.Spec spec = presentation.current();
+        if (spec == null) return;
         sendEmbed(
                 "bounty-created",
-                "FoBounty • Bounty Created",
+                spec,
                 List.of(
-                        DiscordWebhookField.inline("Setter", safe(setterName)),
-                        DiscordWebhookField.inline("Target", safe(targetName)),
-                        DiscordWebhookField.inline("Added", "$" + Style.formatMoney(amount)),
-                        DiscordWebhookField.inline("Total", "$" + Style.formatMoney(total))
+                        DiscordWebhookField.inline(spec.text("bounty-created.setter"), safe(spec, setterName)),
+                        DiscordWebhookField.inline(spec.text("bounty-created.target"), safe(spec, targetName)),
+                        DiscordWebhookField.inline(spec.text("bounty-created.added"), money(spec, amount)),
+                        DiscordWebhookField.inline(spec.text("bounty-created.total"), money(spec, total))
                 )
         );
     }
 
     public void sendBountyRemovedByAdmin(String adminName, String targetName, long amount) {
+        WebhookPresentation.Spec spec = presentation.current();
+        if (spec == null) return;
         sendEmbed(
                 "bounty-removed-by-admin",
-                "FoBounty • Bounty Removed By Admin",
+                spec,
                 List.of(
-                        DiscordWebhookField.inline("Admin", safe(adminName)),
-                        DiscordWebhookField.inline("Target", safe(targetName)),
-                        DiscordWebhookField.inline("Removed Amount", "$" + Style.formatMoney(amount))
+                        DiscordWebhookField.inline(spec.text("bounty-removed-by-admin.admin"), safe(spec, adminName)),
+                        DiscordWebhookField.inline(spec.text("bounty-removed-by-admin.target"), safe(spec, targetName)),
+                        DiscordWebhookField.inline(spec.text("bounty-removed-by-admin.removed"), money(spec, amount))
                 )
         );
     }
 
     public void sendBountyClaimed(String killerName, String targetName, long amount) {
+        WebhookPresentation.Spec spec = presentation.current();
+        if (spec == null) return;
         sendEmbed(
                 "bounty-claimed",
-                "FoBounty • Bounty Claimed",
+                spec,
                 List.of(
-                        DiscordWebhookField.inline("Killer", safe(killerName)),
-                        DiscordWebhookField.inline("Target", safe(targetName)),
-                        DiscordWebhookField.inline("Amount", "$" + Style.formatMoney(amount))
+                        DiscordWebhookField.inline(spec.text("bounty-claimed.killer"), safe(spec, killerName)),
+                        DiscordWebhookField.inline(spec.text("bounty-claimed.target"), safe(spec, targetName)),
+                        DiscordWebhookField.inline(spec.text("bounty-claimed.amount"), money(spec, amount))
                 )
         );
     }
 
-    private void sendEmbed(String eventId, String title, List<DiscordWebhookField> fields) {
+    private void sendEmbed(String eventId, WebhookPresentation.Spec spec, List<DiscordWebhookField> fields) {
         DiscordWebhookEmbed embed = new DiscordWebhookEmbed(
-                title,
+                spec.text(eventId + ".title"),
+                spec.text(eventId + ".description"),
                 "",
                 "",
-                EMBED_COLOR,
+                spec.color(),
                 fields,
                 "",
                 "",
@@ -71,9 +85,13 @@ public final class DiscordWebhookService {
         client.sendEmbed(eventId, embed);
     }
 
-    private String safe(String value) {
+    private String money(WebhookPresentation.Spec spec, long amount) {
+        return spec.render("money", Map.of("amount", Style.formatMoney(amount)));
+    }
+
+    private String safe(WebhookPresentation.Spec spec, String value) {
         if (value == null || value.isBlank()) {
-            return "Unknown";
+            return spec.text("unknown-name");
         }
         return value;
     }

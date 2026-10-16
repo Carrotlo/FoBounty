@@ -1,5 +1,6 @@
 package me.foesio.foBounty.listener;
 
+import me.foesio.foBounty.util.BountyMessages;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.sound.FoSoundService;
 import me.foesio.foBounty.config.PluginSettings;
@@ -134,7 +135,7 @@ public final class PlayerDeathListener implements Listener {
             Map<String, String> replacements = new HashMap<>();
             replacements.put("amount", Style.formatMoney(result.getAmount()));
             replacements.put("target", result.getTargetName());
-            messages.send(killer, "claim-reward", "claim-reward", replacements);
+            BountyMessages.send(messages, killer, "claim-reward", "claim-reward", replacements);
             sounds.play(killer, "bounty.claimed");
             discordWebhookService.sendBountyClaimed(killer.getName(), result.getTargetName(), result.getAmount());
 
@@ -145,35 +146,35 @@ public final class PlayerDeathListener implements Listener {
                 announce.put("killer", killer.getName());
                 announce.put("amount", Style.formatMoney(result.getAmount()));
                 announce.put("target", result.getTargetName());
-                messages.broadcastConfigured("claim-announce", announce);
+                BountyMessages.broadcast(messages, "claim-announce", announce);
             }
             return;
         }
 
         if (result.getStatus() == BountyService.ClaimStatus.NO_ECONOMY && killer != null) {
-            messages.send(killer, "no-economy", "no-economy");
+            BountyMessages.send(messages, killer, "no-economy", "no-economy");
             sounds.play(killer, "bounty.error");
             return;
         }
 
         if (result.getStatus() == BountyService.ClaimStatus.BLOCKED_ANTI_ABUSE && killer != null) {
-            messages.send(killer, "claim-blocked-alt", "claim-blocked-alt");
+            BountyMessages.send(messages, killer, "claim-blocked-alt", "claim-blocked-alt");
             sounds.play(killer, "bounty.error");
             return;
         }
 
         if (result.getStatus() == BountyService.ClaimStatus.BLOCKED_SAME_TEAM && killer != null) {
-            messages.send(killer, "claim-blocked-team", "claim-blocked-team");
+            BountyMessages.send(messages, killer, "claim-blocked-team", "claim-blocked-team");
             sounds.play(killer, "bounty.error");
             return;
         }
 
         if (result.getStatus() == BountyService.ClaimStatus.FAILURE) {
             if (killer != null) {
-                messages.send(killer, "claim-failed", "claim-failed");
+                BountyMessages.send(messages, killer, "claim-failed", "claim-failed");
                 sounds.play(killer, "bounty.error");
             } else {
-                messages.send(victim, "claim-failed", "claim-failed");
+                BountyMessages.send(messages, victim, "claim-failed", "claim-failed");
                 sounds.play(victim, "bounty.error");
             }
             return;
@@ -181,7 +182,7 @@ public final class PlayerDeathListener implements Listener {
 
         if (result.getStatus() == BountyService.ClaimStatus.LOST_NATURAL) {
             Map<String, String> replacements = Map.of("amount", Style.formatMoney(result.getAmount()));
-            messages.send(victim, "natural-lost", "natural-lost", replacements);
+            BountyMessages.send(messages, victim, "natural-lost", "natural-lost", replacements);
             sounds.play(victim, "bounty.lost");
         }
     }

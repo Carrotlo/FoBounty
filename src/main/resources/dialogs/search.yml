@@ -1,17 +1,33 @@
-# Native dialog shown when a player clicks the bounty browser search button.
-# Valid placeholders: {current}.
-# Falls back to the chat search prompt on Spigot, older Paper, or when native-dialogs.enabled is false.
-
+# Public search input. Native Paper dialog and chat fallback share these owner values.
 title: "{theme}Search Bounties"
 body:
   - "{muted}Enter a player name to filter active bounties."
-  - "{muted}Use the cancel button to return without changing the search."
+  - "{muted}Use the Cancel button to return without changing the search."
 field-label: "{white}Player name"
 initial-value: "{current}"
-confirm-button: "{good}Search"
-cancel-button: "{bad}Cancel"
-
+# Chat guidance; the Paper text input API has no placeholder field.
+placeholder: ""
+confirm-button:
+  label: "{good}Search"
+  tooltip: ""
+  icon: "spyglass"
+  width: 100
+cancel-button:
+  label: "{bad}Cancel"
+  tooltip: ""
+  icon: "barrier"
+  width: 100
+button-order: [cancel, confirm]
 body-width: 300
 input-width: 300
-button-width: 100
 max-length: 32
+label-visible: true
+can-close-with-escape: false
+pause: false
+cancel-keyword: "cancel"
+chat-lines:
+  - "{title}"
+  - "{body}"
+  - "{field-label}: {current}"
+  - "{placeholder}"
+  - "{muted}Type {bad}{cancel-keyword}{muted} to cancel."

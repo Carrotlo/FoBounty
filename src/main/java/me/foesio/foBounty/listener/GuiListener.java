@@ -1,10 +1,9 @@
 package me.foesio.foBounty.listener;
 
 import me.foesio.core.scheduler.FoScheduler;
+import me.foesio.core.gui.publicgui.PublicGuiInventoryHolder;
 import me.foesio.foBounty.gui.AdminEditorHolder;
-import me.foesio.foBounty.gui.BountyMainHolder;
 import me.foesio.foBounty.gui.GuiManager;
-import me.foesio.foBounty.gui.HistoryHolder;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -30,15 +29,6 @@ public final class GuiListener implements Listener {
             return;
         }
 
-        if (holder instanceof BountyMainHolder) {
-            event.setCancelled(true);
-            if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) {
-                return;
-            }
-            guiManager.onMainClick(player, event.getRawSlot(), event.getCurrentItem());
-            return;
-        }
-
         if (holder instanceof AdminEditorHolder) {
             event.setCancelled(true);
             if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) {
@@ -48,19 +38,12 @@ public final class GuiListener implements Listener {
             return;
         }
 
-        if (holder instanceof HistoryHolder historyHolder) {
-            event.setCancelled(true);
-            if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) {
-                return;
-            }
-            guiManager.onHistoryClick(player, event.getRawSlot(), historyHolder);
-        }
     }
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         InventoryHolder holder = event.getView().getTopInventory().getHolder();
-        if (holder instanceof BountyMainHolder || holder instanceof AdminEditorHolder || holder instanceof HistoryHolder) {
+        if (holder instanceof AdminEditorHolder) {
             event.setCancelled(true);
         }
     }
@@ -68,7 +51,9 @@ public final class GuiListener implements Listener {
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         InventoryHolder holder = event.getInventory().getHolder();
-        if (!(holder instanceof BountyMainHolder) || !(event.getPlayer() instanceof Player player)) {
+        if (!(holder instanceof PublicGuiInventoryHolder publicHolder)
+                || !publicHolder.frame().definition().menuId().equals("bounty.main")
+                || !(event.getPlayer() instanceof Player player)) {
             return;
         }
         if (guiManager.consumeSuppressedClose(player)) {
@@ -77,7 +62,8 @@ public final class GuiListener implements Listener {
 
         scheduler.runForPlayer(player, () -> {
             InventoryHolder currentTop = player.getOpenInventory().getTopInventory().getHolder();
-            if (!(currentTop instanceof BountyMainHolder)) {
+            if (!(currentTop instanceof PublicGuiInventoryHolder current)
+                    || !current.frame().definition().menuId().equals("bounty.main")) {
                 guiManager.clearSearch(player.getUniqueId());
             }
         });

@@ -15,28 +15,19 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+/** Legacy gameplay-settings updater; public GUI files use PublicGuiUpgrade instead. */
 final class YamlFileUpdater {
     private YamlFileUpdater() {
     }
 
-    static YamlConfiguration update(JavaPlugin plugin,
-                                    String resourceName,
-                                    Set<String> obsoletePaths,
-                                    Map<String, ?> exactDefaultReplacements) {
+    static YamlConfiguration update(JavaPlugin plugin, String resourceName,
+                                    Set<String> obsoletePaths, Map<String, ?> exactDefaultReplacements) {
         File file = new File(plugin.getDataFolder(), resourceName);
-        if (!file.exists()) {
-            plugin.saveResource(resourceName, false);
-        }
-
+        if (!file.exists()) plugin.saveResource(resourceName, false);
         YamlConfiguration current = loadFile(plugin, file);
         YamlConfiguration defaults = loadResource(plugin, resourceName);
-        if (current == null) {
-            return defaults == null ? new YamlConfiguration() : defaults;
-        }
-        if (defaults == null) {
-            return current;
-        }
-
+        if (current == null) return defaults == null ? new YamlConfiguration() : defaults;
+        if (defaults == null) return current;
         boolean changed = false;
         for (String path : obsoletePaths) {
             if (current.isSet(path)) {
@@ -44,22 +35,16 @@ final class YamlFileUpdater {
                 changed = true;
             }
         }
-
         for (Map.Entry<String, ?> entry : exactDefaultReplacements.entrySet()) {
             String path = entry.getKey();
-            Object oldDefault = entry.getValue();
-            if (Objects.equals(oldDefault, current.get(path)) && defaults.isSet(path)) {
+            if (Objects.equals(entry.getValue(), current.get(path)) && defaults.isSet(path)) {
                 current.set(path, defaults.get(path));
                 changed = true;
             }
         }
-
         changed |= copyMissingDefaults(current, defaults);
         changed |= copyMissingComments(current, defaults);
-
-        if (changed) {
-            save(plugin, file, current);
-        }
+        if (changed) save(plugin, file, current);
         return current;
     }
 
@@ -70,15 +55,10 @@ final class YamlFileUpdater {
     private static boolean copyMissingDefaults(YamlConfiguration current, YamlConfiguration defaults) {
         boolean changed = false;
         for (String path : defaults.getKeys(true)) {
-            if (current.isSet(path)) {
-                continue;
-            }
+            if (current.isSet(path)) continue;
             Object value = defaults.get(path);
-            if (value instanceof ConfigurationSection) {
-                current.createSection(path);
-            } else {
-                current.set(path, value);
-            }
+            if (value instanceof ConfigurationSection) current.createSection(path);
+            else current.set(path, value);
             changed = true;
         }
         return changed;
@@ -100,7 +80,6 @@ final class YamlFileUpdater {
                 current.setComments(path, comments);
                 changed = true;
             }
-
             List<String> inlineComments = defaults.getInlineComments(path);
             if (!inlineComments.isEmpty() && current.getInlineComments(path).isEmpty()) {
                 current.setInlineComments(path, inlineComments);
@@ -128,7 +107,6 @@ final class YamlFileUpdater {
             plugin.getLogger().warning("Missing bundled resource " + resourceName);
             return null;
         }
-
         YamlConfiguration configuration = new YamlConfiguration();
         configuration.options().parseComments(true);
         try (InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
@@ -139,11 +117,13 @@ final class YamlFileUpdater {
         return configuration;
     }
 
-    private static void save(JavaPlugin plugin, File file, YamlConfiguration configuration) {
+    private static boolean save(JavaPlugin plugin, File file, YamlConfiguration configuration) {
         try {
             configuration.save(file);
+            return true;
         } catch (IOException exception) {
             plugin.getLogger().warning("Could not update " + file.getName() + ": " + exception.getMessage());
+            return false;
         }
     }
 }

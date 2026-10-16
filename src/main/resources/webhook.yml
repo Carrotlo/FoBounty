@@ -1,0 +1,23 @@
+# Presentation for FoBounty's Discord embeds. The webhook URL and event toggles remain in config.yml.
+color: 261256
+unknown-name: "Unknown"
+money: "${amount}"
+bounty-created:
+  title: "FoBounty • Bounty Created"
+  description: ""
+  setter: "Setter"
+  target: "Target"
+  added: "Added"
+  total: "Total"
+bounty-removed-by-admin:
+  title: "FoBounty • Bounty Removed By Admin"
+  description: ""
+  admin: "Admin"
+  target: "Target"
+  removed: "Removed Amount"
+bounty-claimed:
+  title: "FoBounty • Bounty Claimed"
+  description: ""
+  killer: "Killer"
+  target: "Target"
+  amount: "Amount"

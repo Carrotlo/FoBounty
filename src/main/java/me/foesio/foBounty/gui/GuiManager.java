@@ -1,28 +1,25 @@
 package me.foesio.foBounty.gui;
 
-import me.foesio.core.dialog.ConfiguredTextDialogs;
+import me.foesio.foBounty.util.BountyMessages;
 import me.foesio.core.dialog.DialogButton;
 import me.foesio.core.dialog.DialogInputService;
 import me.foesio.core.dialog.DialogIcons;
 import me.foesio.core.dialog.TextDialogRequest;
-import me.foesio.core.editor.CycleOption;
-import me.foesio.core.editor.CycleOptions;
 import me.foesio.core.editor.EditorItemFactory;
-import me.foesio.core.gui.FoButtonStyle;
-import me.foesio.core.gui.GuiButtonConfig;
-import me.foesio.core.gui.GuiTitles;
+import me.foesio.core.gui.publicgui.PublicGuiClick;
+import me.foesio.core.gui.publicgui.PublicGuiDefinition;
+import me.foesio.core.gui.publicgui.PublicGuiItemRenderer;
+import me.foesio.core.gui.publicgui.PublicGuiRenderInput;
+import me.foesio.core.gui.publicgui.PublicGuiService;
+import me.foesio.core.gui.publicgui.PublicGuiText;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.message.FoStyle;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.core.sound.FoEditorSounds;
 import me.foesio.core.sound.FoGuiSounds;
-import me.foesio.foBounty.config.GuiConfig;
-import me.foesio.foBounty.config.GuiConfig.GuiItem;
-import me.foesio.foBounty.config.GuiConfig.GuiButtonSlot;
-import me.foesio.foBounty.config.GuiConfig.HistoryGui;
-import me.foesio.foBounty.config.GuiConfig.MainGui;
 import me.foesio.foBounty.config.PluginSettings;
+import me.foesio.foBounty.input.SearchInputService;
 import me.foesio.foBounty.model.ActiveBounty;
 import me.foesio.foBounty.model.AdminPromptType;
 import me.foesio.foBounty.model.BountyContribution;
@@ -35,15 +32,10 @@ import me.foesio.foBounty.util.CooldownService;
 import me.foesio.foBounty.util.Items;
 import me.foesio.foBounty.util.Style;
 import org.bukkit.Bukkit;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
@@ -75,31 +67,28 @@ public final class GuiManager {
     private final JavaPlugin plugin;
     private final PluginSettings settings;
     private final FoMessageService messages;
-    private GuiConfig guiConfig;
+    private PublicGuiService publicGuis;
     private final BountyService bountyService;
     private final CooldownService cooldownService;
     private final FoScheduler scheduler;
     private final FoEditorSounds editorSounds;
     private final FoGuiSounds guiSounds;
-    private final GuiButtonConfig buttons = GuiButtonConfig.defaults();
     private DialogInputService dialogInputs;
-    private final ConfiguredTextDialogs textDialogs;
+    private final SearchInputService searchInputs;
     private InventoryCloseSuppressor closeSuppressor;
 
     private final Map<UUID, BountyViewState> viewStates = new ConcurrentHashMap<>();
     private final Map<UUID, HistoryState> historyStates = new ConcurrentHashMap<>();
     private final Set<UUID> warnedFallbackAdmins = ConcurrentHashMap.newKeySet();
 
-    private final NamespacedKey bountyTargetKey;
 
     public GuiManager(JavaPlugin plugin,
                       PluginSettings settings,
                       FoMessageService messages,
-                      GuiConfig guiConfig,
                       BountyService bountyService,
                       CooldownService cooldownService,
                       DialogInputService dialogInputs,
-                      ConfiguredTextDialogs textDialogs,
+                      SearchInputService searchInputs,
                       InventoryCloseSuppressor closeSuppressor,
                       FoScheduler scheduler,
                       FoEditorSounds editorSounds,
@@ -107,16 +96,14 @@ public final class GuiManager {
         this.plugin = plugin;
         this.settings = settings;
         this.messages = messages;
-        this.guiConfig = guiConfig;
         this.bountyService = bountyService;
         this.cooldownService = cooldownService;
         this.scheduler = scheduler;
         this.editorSounds = editorSounds;
         this.guiSounds = guiSounds;
         this.dialogInputs = dialogInputs;
-        this.textDialogs = textDialogs;
+        this.searchInputs = searchInputs;
         this.closeSuppressor = closeSuppressor;
-        this.bountyTargetKey = new NamespacedKey(plugin, "bounty_target");
     }
 
     public void setDialogServices(DialogInputService dialogInputs, InventoryCloseSuppressor closeSuppressor) {
@@ -124,8 +111,8 @@ public final class GuiManager {
         this.closeSuppressor = closeSuppressor;
     }
 
-    public void setGuiConfig(GuiConfig guiConfig) {
-        this.guiConfig = guiConfig;
+    public void setPublicGuis(PublicGuiService publicGuis) {
+        this.publicGuis = publicGuis;
     }
 
     public void openMain(Player player) {
@@ -137,7 +124,16 @@ public final class GuiManager {
         BountyViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
         state.setSearchTarget(sanitizeSearchTarget(searchTarget));
         state.setPage(0);
-        openMain(player, state, () -> guiSounds.search(player));
+        boolean noMatch = bountyService.getSortedBounties(state.getFilter(), state.getSearchTarget()).isEmpty();
+        openMain(player, state, () -> {
+            if (noMatch) {
+                BountyMessages.send(messages, player, "search-no-match", "",
+                        Map.of("player", state.getSearchTarget()));
+                guiSounds.error(player);
+            } else {
+                guiSounds.search(player);
+            }
+        });
     }
 
     public void clearSearch(UUID viewerUuid) {
@@ -192,29 +188,26 @@ public final class GuiManager {
     }
 
     public void beginSearch(Player player) {
+        if (!searchInputs.available()) {
+            unavailable(player);
+            return;
+        }
         BountyViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
-        TextDialogRequest request = textDialogs.request("search", dialogReplacements(Map.of(
-                "current", safeValue(state.getSearchTarget())
-        )));
-        openTextInput(player, request,
-                input -> handleSearchInput(player, input),
-                () -> {
-                    guiSounds.cancel(player);
-                    sendCancelled(player);
-                },
-                () -> guiSounds.open(player));
+        warnFallbackAdminOnce(player);
+        suppressNextClose(player);
+        Map<String, String> values = uiValues();
+        values.put("current", safeValue(state.getSearchTarget()));
+        searchInputs.open(player, values, input -> handleSearchInput(player, input), () -> {
+            guiSounds.cancel(player);
+            sendCancelled(player);
+        });
+        guiSounds.open(player);
     }
 
     private void handleSearchInput(Player player, String input) {
         String searchTarget = sanitizeSearchTarget(input);
-        if (searchTarget.equalsIgnoreCase("cancel")) {
-            guiSounds.cancel(player);
-            sendCancelled(player);
-            return;
-        }
         if (searchTarget.isBlank()) {
-            Map<String, String> replacements = Map.of("player", " ");
-            messages.send(player, "search-no-match", "search-no-match", replacements);
+            BountyMessages.send(messages, player, "search-empty", "");
             guiSounds.error(player);
             return;
         }
@@ -294,78 +287,69 @@ public final class GuiManager {
         reopenAdminEditor(player);
     }
 
-    public void onMainClick(Player player, int slot, ItemStack currentItem) {
-        BountyViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
-        MainGui gui = guiConfig.mainGui();
-        if (slot == gui.back().slot()) {
-            if (cooldownService.isOnCooldown(player.getUniqueId(), "main-page", settings.getGuiRefreshCooldownMs())) {
-                return;
+    public void onPublicClick(PublicGuiClick click) {
+        Player player = click.player();
+        BountyViewState main = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
+        HistoryState history = historyStates.get(player.getUniqueId());
+        switch (click.actionId()) {
+            case "bounty.previous-page" -> {
+                if ("bounty.main".equals(click.menuId())) {
+                    if (!cooldownService.isOnCooldown(player.getUniqueId(), "main-page", settings.getGuiRefreshCooldownMs())) {
+                        main.setPage(Math.max(0, main.getPage() - 1));
+                        openMain(player, main, () -> guiSounds.previousPage(player));
+                    }
+                } else if (history != null && history.page > 0 && !isHistoryOnCooldown(player)) {
+                    history.page--;
+                    openHistory(player, history.targetUuid, history.targetName, false, () -> guiSounds.previousPage(player));
+                }
             }
-            state.setPage(Math.max(0, state.getPage() - 1));
-            openMain(player, state, () -> guiSounds.previousPage(player));
-            return;
-        }
-        if (slot == gui.next().slot()) {
-            if (cooldownService.isOnCooldown(player.getUniqueId(), "main-page", settings.getGuiRefreshCooldownMs())) {
-                return;
+            case "bounty.next-page" -> {
+                if ("bounty.main".equals(click.menuId())) {
+                    if (!cooldownService.isOnCooldown(player.getUniqueId(), "main-page", settings.getGuiRefreshCooldownMs())) {
+                        main.setPage(main.getPage() + 1);
+                        openMain(player, main, () -> guiSounds.nextPage(player));
+                    }
+                } else if (history != null && history.page < history.maxPage && !isHistoryOnCooldown(player)) {
+                    history.page++;
+                    openHistory(player, history.targetUuid, history.targetName, false, () -> guiSounds.nextPage(player));
+                }
             }
-            state.setPage(state.getPage() + 1);
-            openMain(player, state, () -> guiSounds.nextPage(player));
-            return;
-        }
-        if (slot == gui.refresh().slot()) {
-            if (!cooldownService.isOnCooldown(player.getUniqueId(), "refresh", settings.getGuiRefreshCooldownMs())) {
-                openMain(player, state, () -> guiSounds.click(player));
+            case "bounty.refresh" -> {
+                if (!cooldownService.isOnCooldown(player.getUniqueId(), "refresh", settings.getGuiRefreshCooldownMs())) {
+                    openMain(player, main, () -> guiSounds.click(player));
+                }
             }
-            return;
-        }
-        if (slot == gui.filter().slot()) {
-            if (!cooldownService.isOnCooldown(player.getUniqueId(), "filter", settings.getGuiFilterCooldownMs())) {
-                state.setFilter(state.getFilter().next());
-                state.setPage(0);
-                openMain(player, state, () -> guiSounds.filter(player));
+            case "bounty.filter" -> {
+                if (!cooldownService.isOnCooldown(player.getUniqueId(), "filter", settings.getGuiFilterCooldownMs())) {
+                    main.setFilter(main.getFilter().next());
+                    main.setPage(0);
+                    openMain(player, main, () -> guiSounds.filter(player));
+                }
             }
-            return;
-        }
-        if (slot == gui.search().slot()) {
-            if (cooldownService.isOnCooldown(player.getUniqueId(), "search", settings.getGuiFilterCooldownMs())) {
-                return;
+            case "bounty.search" -> {
+                if (!cooldownService.isOnCooldown(player.getUniqueId(), "search", settings.getGuiFilterCooldownMs())) {
+                    beginSearch(player);
+                }
             }
-            beginSearch(player);
-            return;
-        }
-        if (slot == gui.clearSearch().slot()) {
-            if (state.getSearchTarget() != null && !state.getSearchTarget().isBlank()) {
-                state.setSearchTarget(null);
-                state.setPage(0);
-                openMain(player, state, () -> guiSounds.clearSearch(player));
+            case "bounty.clear-search" -> {
+                main.setSearchTarget(null);
+                main.setPage(0);
+                openMain(player, main, () -> guiSounds.clearSearch(player));
             }
-            return;
-        }
-        if (slot == gui.history().slot()) {
-            openHistory(player, player.getUniqueId(), player.getName());
-            return;
-        }
-
-        if (currentItem == null) {
-            return;
-        }
-        ItemMeta meta = currentItem.getItemMeta();
-        if (meta == null) {
-            return;
-        }
-        String targetRaw = meta.getPersistentDataContainer().get(bountyTargetKey, PersistentDataType.STRING);
-        if (targetRaw == null) {
-            return;
-        }
-        try {
-            UUID targetUuid = UUID.fromString(targetRaw);
-            ActiveBounty bounty = findBountyByUuid(targetUuid);
-            if (bounty != null) {
-                openHistory(player, targetUuid, bounty.getTargetName(), () -> guiSounds.select(player));
+            case "bounty.history" -> openHistory(player, player.getUniqueId(), player.getName());
+            case "bounty.entry-history" -> {
+                try {
+                    UUID target = UUID.fromString(click.entryId());
+                    ActiveBounty bounty = findBountyByUuid(target);
+                    if (bounty != null) {
+                        openHistory(player, target, bounty.getTargetName(), () -> guiSounds.select(player));
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // An entry may have been removed since the view was rendered.
+                }
             }
-        } catch (IllegalArgumentException ignored) {
-            // ignored
+            case "bounty.back-to-bounties" -> openMain(player, main, () -> guiSounds.back(player));
+            default -> throw new IllegalArgumentException("Unknown public GUI action " + click.actionId());
         }
     }
 
@@ -477,37 +461,6 @@ public final class GuiManager {
         };
     }
 
-    public void onHistoryClick(Player player, int slot, HistoryHolder holder) {
-        HistoryState state = historyStates.computeIfAbsent(player.getUniqueId(),
-                ignored -> new HistoryState(holder.getTargetUuid(), holder.getTargetName(), 0));
-        if (!holder.getTargetUuid().equals(state.targetUuid)) {
-            state.targetUuid = holder.getTargetUuid();
-            state.targetName = holder.getTargetName();
-            state.page = 0;
-        }
-        HistoryGui gui = guiConfig.historyGui();
-        if (slot == gui.back().slot()) {
-            if (isHistoryOnCooldown(player)) {
-                return;
-            }
-            state.page = Math.max(0, state.page - 1);
-            openHistory(player, state.targetUuid, state.targetName, false, () -> guiSounds.previousPage(player));
-            return;
-        }
-        if (slot == gui.next().slot()) {
-            if (isHistoryOnCooldown(player)) {
-                return;
-            }
-            state.page = state.page + 1;
-            openHistory(player, state.targetUuid, state.targetName, false, () -> guiSounds.nextPage(player));
-            return;
-        }
-        if (slot == gui.backToBounties().slot()) {
-            BountyViewState mainState = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new BountyViewState());
-            openMain(player, mainState, () -> guiSounds.back(player));
-        }
-    }
-
     public void openHistory(Player viewer, UUID targetUuid, String targetName) {
         openHistory(viewer, targetUuid, targetName, () -> guiSounds.open(viewer));
     }
@@ -520,8 +473,12 @@ public final class GuiManager {
         if (applyCooldown && isHistoryOnCooldown(viewer)) {
             return;
         }
+        if (publicGuis == null || publicGuis.snapshot() == null) {
+            unavailable(viewer);
+            return;
+        }
         UUID viewerUuid = viewer.getUniqueId();
-        HistoryState state = historyStates.computeIfAbsent(viewer.getUniqueId(),
+        HistoryState state = historyStates.computeIfAbsent(viewerUuid,
                 ignored -> new HistoryState(targetUuid, targetName, 0));
         if (!targetUuid.equals(state.targetUuid)) {
             state.page = 0;
@@ -530,45 +487,41 @@ public final class GuiManager {
         state.targetName = targetName;
 
         bountyService.fetchHistoryForPlayerAsync(viewer, targetUuid, settings.getHistoryCap(), entries -> {
-            if (!viewer.isOnline()) {
+            if (!viewer.isOnline() || publicGuis.snapshot() == null) {
                 return;
             }
-            HistoryState currentState = historyStates.get(viewerUuid);
-            if (currentState == null || !targetUuid.equals(currentState.targetUuid)) {
+            HistoryState current = historyStates.get(viewerUuid);
+            if (current == null || !targetUuid.equals(current.targetUuid)) {
                 return;
             }
-            HistoryGui gui = guiConfig.historyGui();
-            int pageSize = Math.max(1, Math.min(settings.getHistoryPageSize(), gui.contentSlots().size()));
+            PublicGuiDefinition gui = publicGuis.snapshot().require("bounty.history");
+            List<Integer> slots = gui.entries().get("history").slots();
+            int pageSize = Math.max(1, Math.min(settings.getHistoryPageSize(), slots.size()));
             int maxPage = Math.max(0, (entries.size() - 1) / pageSize);
-            currentState.page = Math.min(currentState.page, maxPage);
-            int from = Math.min(entries.size(), currentState.page * pageSize);
+            current.page = Math.min(current.page, maxPage);
+            current.maxPage = maxPage;
+            int from = Math.min(entries.size(), current.page * pageSize);
             int to = Math.min(entries.size(), from + pageSize);
-            List<BountyHistoryEntry> pageEntries = entries.subList(from, to);
-
-            HistoryHolder holder = new HistoryHolder(targetUuid, targetName);
-            String title = GuiTitles.format(gui.title());
-            Inventory inventory = Bukkit.createInventory(holder, gui.size(), title);
-            holder.setInventory(inventory);
-
-            fillInventory(viewer, inventory, gui.filler());
-            fillSlots(viewer, inventory, gui.contentSlots(), gui.emptyContent());
-
-            for (int i = 0; i < pageEntries.size() && i < pageSize; i++) {
-                BountyHistoryEntry entry = pageEntries.get(i);
-                inventory.setItem(gui.contentSlots().get(i), createHistoryEntryItem(viewer, gui, entry));
+            Map<String, String> values = uiValues();
+            values.put("page", String.valueOf(current.page + 1));
+            values.put("max_page", String.valueOf(maxPage + 1));
+            Map<String, String> buttonStates = new HashMap<>();
+            if (current.page == 0) hideIfEnabled(gui, buttonStates, "previous-page");
+            if (current.page >= maxPage) hideIfEnabled(gui, buttonStates, "next-page");
+            Map<Integer, PublicGuiRenderInput.EntryValue> rendered = new HashMap<>();
+            for (int index = from; index < to; index++) {
+                BountyHistoryEntry entry = entries.get(index);
+                ItemStack source = historyEntrySource(viewer, gui, entry, values);
+                rendered.put(slots.get(index - from), new PublicGuiRenderInput.EntryValue(
+                        targetUuid + ":" + index, source, Map.of()));
             }
-
-            if (currentState.page > 0) {
-                placeButton(inventory, gui.back(), buttons.previousPage(viewer, currentState.page, maxPage));
-            }
-            if (currentState.page < maxPage) {
-                placeButton(inventory, gui.next(), buttons.nextPage(viewer, currentState.page, maxPage));
-            }
-            placeButton(inventory, gui.backToBounties(), buttons.back(viewer));
-
-            openForViewer(viewer, inventory);
-            if (afterOpen != null) {
-                afterOpen.run();
+            try {
+                publicGuis.openEntryPoint(viewer, "gui:bounty-history", new PublicGuiRenderInput(
+                        values, buttonStates, Map.of(), Map.of("history", rendered)));
+                if (afterOpen != null) afterOpen.run();
+            } catch (RuntimeException error) {
+                plugin.getLogger().warning("Could not open bounty history GUI: " + error.getMessage());
+                unavailable(viewer);
             }
         });
     }
@@ -578,249 +531,161 @@ public final class GuiManager {
     }
 
     private void openMain(Player player, BountyViewState state, Runnable afterOpen) {
-        MainGui gui = guiConfig.mainGui();
+        if (publicGuis == null || publicGuis.snapshot() == null) {
+            unavailable(player);
+            return;
+        }
+        PublicGuiDefinition gui = publicGuis.snapshot().require("bounty.main");
+        List<Integer> slots = gui.entries().get("bounties").slots();
         List<ActiveBounty> sorted = bountyService.getSortedBounties(state.getFilter(), state.getSearchTarget());
-        int pageSize = gui.contentSlots().size();
+        int pageSize = slots.size();
         int maxPage = Math.max(0, (sorted.size() - 1) / pageSize);
         state.setPage(Math.min(state.getPage(), maxPage));
-
         int from = Math.min(sorted.size(), state.getPage() * pageSize);
         int to = Math.min(sorted.size(), from + pageSize);
-        List<ActiveBounty> pageEntries = sorted.subList(from, to);
 
-        BountyMainHolder holder = new BountyMainHolder();
-        String title = GuiTitles.format(gui.title());
-        Inventory inventory = Bukkit.createInventory(holder, gui.size(), title);
-        holder.setInventory(inventory);
-
-        fillInventory(player, inventory, gui.filler());
-        fillSlots(player, inventory, gui.contentSlots(), gui.emptyContent());
-
+        Map<String, String> values = uiValues();
         long ownBounty = bountyService.getCurrentBounty(player.getUniqueId());
         long totalEarned = bountyService.getCachedTotalEarned(player.getUniqueId());
-        Map<String, String> basePlaceholders = new HashMap<>();
-        basePlaceholders.put("own_bounty", Style.formatMoney(ownBounty));
-        basePlaceholders.put("own_bounty_raw", String.valueOf(ownBounty));
-        basePlaceholders.put("total_earned", Style.formatMoney(totalEarned));
-        basePlaceholders.put("total_earned_raw", String.valueOf(totalEarned));
-        basePlaceholders.put("search", safeValue(state.getSearchTarget()));
-        basePlaceholders.put("page", String.valueOf(state.getPage() + 1));
-        basePlaceholders.put("max_page", String.valueOf(maxPage + 1));
+        values.put("own_bounty", Style.formatMoney(ownBounty));
+        values.put("own_bounty_raw", String.valueOf(ownBounty));
+        values.put("total_earned", Style.formatMoney(totalEarned));
+        values.put("total_earned_raw", String.valueOf(totalEarned));
+        values.put("search", safeValue(state.getSearchTarget()));
+        values.put("page", String.valueOf(state.getPage() + 1));
+        values.put("max_page", String.valueOf(maxPage + 1));
+        boolean hasSearch = state.getSearchTarget() != null && !state.getSearchTarget().isBlank();
+        values.put("current", hasSearch ? state.getSearchTarget() : stateName(gui, "label-no-search"));
+        values.put("target", stateName(gui, "label-clear-search-target"));
 
-        placeItem(player, inventory, gui.info(), basePlaceholders);
-        placeFilterItem(player, inventory, gui, state.getFilter());
-        placeItem(player, inventory, gui.refresh(), basePlaceholders);
-        placeButton(inventory, gui.search(), buttons.search(player, state.getSearchTarget()));
-        if (state.getSearchTarget() != null && !state.getSearchTarget().isBlank()) {
-            placeButton(inventory, gui.clearSearch(), buttons.clearSearch(player, "bounties"));
+        Map<String, String> buttonStates = new HashMap<>();
+        if (state.getPage() == 0) hideIfEnabled(gui, buttonStates, "previous-page");
+        if (state.getPage() >= maxPage) hideIfEnabled(gui, buttonStates, "next-page");
+        if (!hasSearch) hideIfEnabled(gui, buttonStates, "clear-search");
+        List<String> filterLabels = List.of(BountyFilter.values()).stream()
+                .map(filter -> stateName(gui, "filter-" + filter.name().toLowerCase(Locale.ROOT)))
+                .toList();
+        Map<String, PublicGuiText.CycleSelection> cycles = new HashMap<>();
+        if (gui.buttons().containsKey("filter") && gui.buttons().get("filter").enabled()) {
+            cycles.put("filter", new PublicGuiText.CycleSelection(filterLabels, state.getFilter().ordinal()));
         }
-        placeItem(player, inventory, gui.history(), basePlaceholders);
-
-        if (state.getPage() > 0) {
-            placeButton(inventory, gui.back(), buttons.previousPage(player, state.getPage(), maxPage));
-        }
-        if (state.getPage() < maxPage) {
-            placeButton(inventory, gui.next(), buttons.nextPage(player, state.getPage(), maxPage));
-        }
-
-        for (int i = 0; i < pageEntries.size(); i++) {
-            ActiveBounty summary = pageEntries.get(i);
+        Map<Integer, PublicGuiRenderInput.EntryValue> rendered = new HashMap<>();
+        for (int index = from; index < to; index++) {
+            ActiveBounty summary = sorted.get(index);
             ActiveBounty bounty = bountyService.getBountySnapshot(summary.getTargetUuid(), MAX_RENDERED_CONTRIBUTIONS + 1);
-            if (bounty == null) {
-                continue;
-            }
-            inventory.setItem(gui.contentSlots().get(i), createBountyItem(player, gui, bounty));
+            if (bounty == null) continue;
+            ItemStack source = bountyEntrySource(player, gui, bounty, values);
+            rendered.put(slots.get(index - from), new PublicGuiRenderInput.EntryValue(
+                    bounty.getTargetUuid().toString(), source, Map.of()));
         }
+        try {
+            publicGuis.openEntryPoint(player, "command:/bounty", new PublicGuiRenderInput(
+                    values, buttonStates, cycles, Map.of("bounties", rendered)));
+            if (afterOpen != null) afterOpen.run();
+        } catch (RuntimeException error) {
+            plugin.getLogger().warning("Could not open bounty browser GUI: " + error.getMessage());
+            unavailable(player);
+        }
+    }
 
-        openForViewer(player, inventory);
-        if (afterOpen != null) {
-            afterOpen.run();
+    private ItemStack bountyEntrySource(Player viewer, PublicGuiDefinition gui, ActiveBounty bounty,
+                                        Map<String, String> base) {
+        Map<String, String> values = new HashMap<>(base);
+        values.put("player", safeName(bounty.getTargetName(), stateName(gui, "label-unknown-player")));
+        values.put("amount", Style.formatMoney(bounty.getTotalAmount()));
+        values.put("amount_raw", String.valueOf(bounty.getTotalAmount()));
+        values.put("created_at", Style.formatTimestamp(bounty.getCreatedAt()));
+        values.put("updated_at", Style.formatTimestamp(bounty.getUpdatedAt()));
+        List<String> contributions = new ArrayList<>();
+        int shown = 0;
+        for (BountyContribution contribution : bounty.getContributions()) {
+            if (shown >= MAX_RENDERED_CONTRIBUTIONS) break;
+            Map<String, String> lineValues = new HashMap<>(values);
+            lineValues.put("setter", safeName(contribution.getSetterName(), stateName(gui, "label-unknown-player")));
+            lineValues.put("amount", Style.formatMoney(contribution.getAmount()));
+            lineValues.put("amount_raw", String.valueOf(contribution.getAmount()));
+            PublicGuiDefinition.FixedItem line = gui.states().get("contribution-line");
+            if (line != null) contributions.addAll(PublicGuiText.lore(line.lore(),
+                    lineValues, null, null, "states.contribution-line.lore"));
+            shown++;
         }
+        if (bounty.getContributions().size() > shown) {
+            PublicGuiDefinition.FixedItem line = gui.states().get("more-contributors");
+            if (line != null) contributions.addAll(PublicGuiText.lore(line.lore(),
+                    values, null, null, "states.more-contributors.lore"));
+        }
+        PublicGuiDefinition.FixedItem template = gui.states().get("bounty-template");
+        PublicGuiDefinition.FixedItem expanded = expandBountyTemplate(template, contributions);
+        ItemStack source = PublicGuiItemRenderer.fixed(viewer, expanded, values, null, null, "states.bounty-template");
+        if (template.skullSkinUrl() == null && source.getType() == Material.PLAYER_HEAD
+                && source.getItemMeta() instanceof org.bukkit.inventory.meta.SkullMeta skull) {
+            skull.setOwningPlayer(Bukkit.getOfflinePlayer(bounty.getTargetUuid()));
+            source.setItemMeta(skull);
+        }
+        return source;
+    }
+
+    static PublicGuiDefinition.FixedItem expandBountyTemplate(PublicGuiDefinition.FixedItem template,
+                                                              List<String> contributions) {
+        List<String> lore = new ArrayList<>();
+        for (String line : template.lore()) {
+            if ("{contributions}".equals(line)) lore.addAll(contributions);
+            else lore.add(line);
+        }
+        return new PublicGuiDefinition.FixedItem(
+                template.material(), template.name(), lore, template.amount(),
+                template.customModelData(), template.glow(), template.itemFlags(), template.skullSkinUrl());
+    }
+
+    private ItemStack historyEntrySource(Player viewer, PublicGuiDefinition gui, BountyHistoryEntry entry,
+                                         Map<String, String> base) {
+        String id = entry.getType() == HistoryType.CLAIMED ? "claimed-template" : "lost-template";
+        Map<String, String> values = new HashMap<>(base);
+        String related = entry.getType() == HistoryType.CLAIMED
+                ? safeName(entry.getRelatedName(), stateName(gui, "label-unknown-player"))
+                : safeName(entry.getRelatedName(), stateName(gui, "label-natural-death"));
+        values.put("type", stateName(gui, "type-" + entry.getType().name().toLowerCase(Locale.ROOT)));
+        values.put("player", safeName(entry.getPlayerName(), stateName(gui, "label-unknown-player")));
+        values.put("related", related);
+        values.put("target", related);
+        values.put("amount", Style.formatMoney(entry.getAmount()));
+        values.put("amount_raw", String.valueOf(entry.getAmount()));
+        String reasonId = "reason-" + safeValue(entry.getReason()).toLowerCase(Locale.ROOT).replace('_', '-');
+        values.put("reason", gui.states().containsKey(reasonId) ? stateName(gui, reasonId) : "");
+        values.put("time", Style.formatTimestamp(entry.getOccurredAt()));
+        return PublicGuiItemRenderer.fixed(viewer, gui.states().get(id), values, null, null, "states." + id);
+    }
+
+    private Map<String, String> uiValues() {
+        return new HashMap<>(messages.tokenValues());
+    }
+
+    private void hideIfEnabled(PublicGuiDefinition gui, Map<String, String> states, String id) {
+        PublicGuiDefinition.Button button = gui.buttons().get(id);
+        if (button != null && button.enabled() && button.states().containsKey("hidden")) {
+            states.put(id, "hidden");
+        }
+    }
+
+    private String stateName(PublicGuiDefinition gui, String id) {
+        PublicGuiDefinition.FixedItem state = gui.states().get(id);
+        return state == null || state.name() == null ? "" : state.name();
     }
 
     private ActiveBounty findBountyByUuid(UUID uuid) {
         return bountyService.getBountySnapshot(uuid, 0);
     }
 
+    private void unavailable(Player player) {
+        BountyMessages.send(messages, player, "gui-unavailable", "");
+    }
+
     private void openForViewer(Player player, Inventory inventory) {
         for (int slot = 0; slot < inventory.getSize(); slot++) {
             ItemStack item = inventory.getItem(slot);
-            if (item != null) {
-                inventory.setItem(slot, DialogIcons.forViewer(player, item));
-            }
+            if (item != null) inventory.setItem(slot, DialogIcons.forViewer(player, item));
         }
         player.openInventory(inventory);
-    }
-
-    private void fillInventory(Player viewer, Inventory inventory, GuiItem item) {
-        ItemStack stack = createConfiguredItem(viewer, item, Map.of(), Map.of());
-        for (int i = 0; i < inventory.getSize(); i++) {
-            inventory.setItem(i, stack);
-        }
-    }
-
-    private void fillSlots(Player viewer, Inventory inventory, List<Integer> slots, GuiItem item) {
-        ItemStack stack = createConfiguredItem(viewer, item, Map.of(), Map.of());
-        for (int slot : slots) {
-            if (isValidSlot(inventory, slot)) {
-                inventory.setItem(slot, stack);
-            }
-        }
-    }
-
-    private void placeItem(Player viewer, Inventory inventory, GuiItem item, Map<String, String> placeholders) {
-        if (!isValidSlot(inventory, item.slot())) {
-            return;
-        }
-        inventory.setItem(item.slot(), createConfiguredItem(viewer, item, placeholders, Map.of()));
-    }
-
-    private void placeButton(Inventory inventory, GuiButtonSlot button, ItemStack item) {
-        if (!isValidSlot(inventory, button.slot())) {
-            return;
-        }
-        inventory.setItem(button.slot(), item);
-    }
-
-    private void placeFilterItem(Player viewer, Inventory inventory, MainGui gui, BountyFilter selected) {
-        if (isValidSlot(inventory, gui.filter().slot())) {
-            List<CycleOption> options = List.of(BountyFilter.values()).stream()
-                    .map(filter -> new CycleOption(filter.name(), filter.getLabel()))
-                    .toList();
-            String configuredName = messages.renderTemplateForViewer(viewer, gui.filter().name(), Map.of());
-            List<String> filterInformation = CycleOptions.information(viewer, messages, selected.name(), options)
-                    .stream()
-                    .map(FoButtonStyle::informationLine)
-                    .toList();
-            List<String> configuredLore = renderLore(
-                    gui.filter().lore(),
-                    Map.of(),
-                    Map.of("filters", filterInformation)
-            );
-            inventory.setItem(gui.filter().slot(), Items.make(
-                    viewer,
-                    gui.filter().material(),
-                    configuredName,
-                    configuredLore
-            ));
-        }
-    }
-
-    private ItemStack createBountyItem(Player viewer, MainGui gui, ActiveBounty bounty) {
-        Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("player", safeName(bounty.getTargetName(), "Unknown"));
-        placeholders.put("target", safeName(bounty.getTargetName(), "Unknown"));
-        placeholders.put("amount", Style.formatMoney(bounty.getTotalAmount()));
-        placeholders.put("amount_raw", String.valueOf(bounty.getTotalAmount()));
-        placeholders.put("created_at", Style.formatTimestamp(bounty.getCreatedAt()));
-        placeholders.put("updated_at", Style.formatTimestamp(bounty.getUpdatedAt()));
-
-        List<String> contributions = new ArrayList<>();
-        boolean hasMoreContributions = false;
-        int shownContributions = 0;
-        for (BountyContribution contribution : bounty.getContributions()) {
-            if (shownContributions >= MAX_RENDERED_CONTRIBUTIONS) {
-                hasMoreContributions = true;
-                break;
-            }
-            Map<String, String> contributionPlaceholders = new HashMap<>();
-            contributionPlaceholders.put("setter", safeName(contribution.getSetterName(), "Unknown"));
-            contributionPlaceholders.put("amount", Style.formatMoney(contribution.getAmount()));
-            contributionPlaceholders.put("amount_raw", String.valueOf(contribution.getAmount()));
-            contributions.add(render(gui.contributionLine(), contributionPlaceholders));
-            shownContributions++;
-        }
-        if (hasMoreContributions) {
-            contributions.add("&" + Style.MUTED_HEX + Style.BULLET + " More contributors hidden");
-        }
-
-        GuiItem item = gui.bountyItem();
-        ItemStack stack;
-        List<String> lore = renderLore(item.lore(), placeholders, Map.of("contributions", contributions));
-        if (item.material() == Material.PLAYER_HEAD) {
-            stack = Items.playerHead(viewer, bounty.getTargetUuid(), render(item.name(), placeholders), lore);
-        } else {
-            stack = Items.make(viewer, item.material(), render(item.name(), placeholders), lore);
-        }
-        stack.setAmount(item.amount());
-        applyItemOptions(stack, item);
-        ItemMeta meta = stack.getItemMeta();
-        if (meta != null) {
-            meta.getPersistentDataContainer().set(bountyTargetKey, PersistentDataType.STRING, bounty.getTargetUuid().toString());
-            stack.setItemMeta(meta);
-        }
-        return stack;
-    }
-
-    private ItemStack createHistoryEntryItem(Player viewer, HistoryGui gui, BountyHistoryEntry entry) {
-        GuiItem item = entry.getType() == HistoryType.CLAIMED ? gui.claimedEntry() : gui.lostEntry();
-        String related = entry.getType() == HistoryType.CLAIMED
-                ? safeName(entry.getRelatedName(), "Unknown")
-                : safeName(entry.getRelatedName(), "Natural Death");
-        Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("type", entry.getType().name().toLowerCase(Locale.ROOT));
-        placeholders.put("player", safeName(entry.getPlayerName(), "Unknown"));
-        placeholders.put("related", related);
-        placeholders.put("target", related);
-        placeholders.put("amount", Style.formatMoney(entry.getAmount()));
-        placeholders.put("amount_raw", String.valueOf(entry.getAmount()));
-        placeholders.put("reason", entry.getReason());
-        placeholders.put("time", Style.formatTimestamp(entry.getOccurredAt()));
-        return createConfiguredItem(viewer, item, placeholders, Map.of());
-    }
-
-    private ItemStack createConfiguredItem(Player viewer, GuiItem item, Map<String, String> placeholders, Map<String, List<String>> expansions) {
-        ItemStack stack = Items.make(viewer, item.material(), render(item.name(), placeholders), renderLore(item.lore(), placeholders, expansions));
-        stack.setAmount(item.amount());
-        applyItemOptions(stack, item);
-        return stack;
-    }
-
-    private void applyItemOptions(ItemStack stack, GuiItem item) {
-        ItemMeta meta = stack.getItemMeta();
-        if (meta == null) {
-            return;
-        }
-        if (item.customModelData() != null) {
-            meta.setCustomModelData(item.customModelData());
-        }
-        for (ItemFlag flag : item.flags()) {
-            meta.addItemFlags(flag);
-        }
-        if (item.glow()) {
-            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
-            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
-        }
-        stack.setItemMeta(meta);
-    }
-
-    private List<String> renderLore(List<String> lore, Map<String, String> placeholders, Map<String, List<String>> expansions) {
-        List<String> rendered = new ArrayList<>();
-        for (String line : lore) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-                String key = trimmed.substring(1, trimmed.length() - 1);
-                List<String> expansion = expansions.get(key);
-                if (expansion != null) {
-                    rendered.addAll(expansion);
-                    continue;
-                }
-            }
-            rendered.add(render(line, placeholders));
-        }
-        return rendered;
-    }
-
-    private String render(String value, Map<String, String> placeholders) {
-        String rendered = value == null ? "" : value;
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            rendered = rendered.replace("{" + entry.getKey() + "}", entry.getValue() == null ? "" : entry.getValue());
-        }
-        return rendered;
-    }
-
-    private boolean isValidSlot(Inventory inventory, int slot) {
-        return slot >= 0 && slot < inventory.getSize();
     }
 
     private boolean isHistoryOnCooldown(Player player) {
@@ -831,13 +696,13 @@ public final class GuiManager {
         Map<String, String> replacements = new HashMap<>();
         replacements.put("setting", key);
         replacements.put("value", value);
-        messages.send(player, "editor.saved", EDITOR_SAVED_MESSAGE, replacements);
+        BountyMessages.send(messages, player, "editor.saved", EDITOR_SAVED_MESSAGE, replacements);
     }
 
     private void sendInvalidEditor(Player player, String key) {
         Map<String, String> replacements = new HashMap<>();
         replacements.put("setting", key);
-        messages.send(player, "editor.invalid-input", EDITOR_INVALID_INPUT_MESSAGE, replacements);
+        BountyMessages.send(messages, player, "editor.invalid-input", EDITOR_INVALID_INPUT_MESSAGE, replacements);
         editorSounds.error(player);
     }
 
@@ -858,7 +723,7 @@ public final class GuiManager {
     }
 
     private void sendCancelled(Player player) {
-        messages.send(player, "search-cancelled", "search-cancelled");
+        BountyMessages.send(messages, player, "search-cancelled", "search-cancelled");
     }
 
     public boolean consumeSuppressedClose(Player player) {
@@ -887,13 +752,7 @@ public final class GuiManager {
                 || !warnedFallbackAdmins.add(player.getUniqueId())) {
             return;
         }
-        messages.send(player, "native-dialogs-unavailable", "native-dialogs-unavailable");
-    }
-
-    private Map<String, String> dialogReplacements(Map<String, String> replacements) {
-        Map<String, String> rendered = new HashMap<>(messages.tokenValues());
-        rendered.putAll(replacements);
-        return rendered;
+        BountyMessages.send(messages, player, "native-dialogs-unavailable", "native-dialogs-unavailable");
     }
 
     private String safeValue(String value) {
@@ -919,6 +778,7 @@ public final class GuiManager {
         private UUID targetUuid;
         private String targetName;
         private int page;
+        private int maxPage;
 
         private HistoryState(UUID targetUuid, String targetName, int page) {
             this.targetUuid = targetUuid;
@@ -926,4 +786,5 @@ public final class GuiManager {
             this.page = page;
         }
     }
+
 }

@@ -1,72 +1,124 @@
-# Public bounty history GUI.
-# Slots are 0-based. Inventory rows must be 1-6. Invalid slots/materials fall back safely.
-# Titles are rendered dark gray and small caps in code to match Fo GUI style.
-# Common item keys: slot, material, amount, name, lore, custom-model-data, glow, flags.
-
 title: "ʙᴏᴜɴᴛʏ ʜɪꜱᴛᴏʀʏ"
 rows: 6
-
-# Dynamic history entries render in these slots.
-content-slots:
-  - 10
-  - 11
-  - 12
-  - 13
-  - 14
-  - 15
-  - 16
-  - 19
-  - 20
-  - 21
-  - 22
-  - 23
-  - 24
-  - 25
-  - 28
-  - 29
-  - 30
-  - 31
-  - 32
-  - 33
-  - 34
-  - 37
-  - 38
-  - 39
-  - 40
-  - 41
-  - 42
-  - 43
-
 filler:
-  material: GRAY_STAINED_GLASS_PANE
+  enabled: true
+  material: "GRAY_STAINED_GLASS_PANE"
   name: " "
-
-empty-content:
-  material: LIGHT_GRAY_STAINED_GLASS_PANE
-  name: " "
-
-items:
-  back:
+buttons:
+  previous-page:
     slot: 45
-  next:
+    material: "ARROW"
+    name: ":arrow: {theme}&lPREVIOUS PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage: {theme}{page}/{max_page}"
+      - " "
+      - "{good}→ Click to View the Previous Page ←"
+    enabled: true
+    action: "bounty.previous-page"
+    states:
+      hidden:
+        clickable: false
+        material: "GRAY_STAINED_GLASS_PANE"
+        name: " "
+  next-page:
     slot: 53
+    material: "ARROW"
+    name: ":arrow: {theme}&lNEXT PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage: {theme}{page}/{max_page}"
+      - " "
+      - "{good}→ Click to View the Next Page ←"
+    enabled: true
+    action: "bounty.next-page"
+    states:
+      hidden:
+        clickable: false
+        material: "GRAY_STAINED_GLASS_PANE"
+        name: " "
   back-to-bounties:
     slot: 49
-
-# Dynamic history entry items.
-# Valid placeholders: {type}, {player}, {related}, {target}, {amount}, {amount_raw}, {reason}, {time}.
+    material: "IRON_DOOR"
+    name: ":iron_door: &e&lBACK TO BOUNTIES"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the bounty browser."
+      - " "
+      - "{good}→ Click to Go Back ←"
+    enabled: true
+    action: "bounty.back-to-bounties"
 entries:
-  claimed:
-    material: EMERALD
+  history:
+    slots:
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 28
+      - 29
+      - 30
+      - 31
+      - 32
+      - 33
+      - 34
+      - 37
+      - 38
+      - 39
+      - 40
+      - 41
+      - 42
+      - 43
+    source-item: {}
+    empty-item:
+      material: "LIGHT_GRAY_STAINED_GLASS_PANE"
+      name: " "
+states:
+  claimed-template:
+    material: "EMERALD"
     name: "{theme}Claimed ${amount}"
     lore:
       - "{white}Time: {theme}{time}"
       - "{white}Target: {theme}{related}"
       - "{white}Reason: {theme}{reason}"
-  lost:
-    material: REDSTONE
+  lost-template:
+    material: "REDSTONE"
     name: "{theme}Lost ${amount}"
     lore:
       - "{white}Time: {theme}{time}"
       - "{white}By: {theme}{related}"
       - "{white}Reason: {theme}{reason}"
+  label-unknown-player:
+    material: "PAPER"
+    name: "Unknown"
+  label-natural-death:
+    material: "PAPER"
+    name: "Natural Death"
+  reason-pvp:
+    material: "PAPER"
+    name: "PvP"
+  reason-natural-death:
+    material: "PAPER"
+    name: "Natural Death"
+  type-claimed:
+    material: "PAPER"
+    name: "Claimed"
+  type-lost:
+    material: "PAPER"
+    name: "Lost"

@@ -224,7 +224,7 @@ public final class BountyService {
             return new AddResult(AddStatus.FAILURE, 0);
         }
 
-        String targetName = target.getName() != null ? target.getName() : "Unknown";
+        String targetName = target.getName() != null ? target.getName() : "";
         long now = System.currentTimeMillis();
         UUID targetUuid = target.getUniqueId();
         ActiveBounty existing = activeBounties.get(targetUuid);
