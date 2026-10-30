@@ -13,6 +13,7 @@ import me.foesio.core.sound.FoEditorSounds;
 import me.foesio.core.sound.FoGuiSounds;
 import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
+import me.foesio.foBounty.api.BountyApi;
 import me.foesio.foBounty.command.BountyAdminCommand;
 import me.foesio.foBounty.command.BountyCommand;
 import me.foesio.foBounty.config.PublicGuiUpgrade;
@@ -25,6 +26,8 @@ import me.foesio.foBounty.listener.GuiListener;
 import me.foesio.foBounty.listener.PlayerDeathListener;
 import me.foesio.foBounty.listener.PlayerJoinListener;
 import me.foesio.foBounty.service.BountyService;
+import me.foesio.foBounty.service.BountyApiImpl;
+import me.foesio.foBounty.service.BountyNotifications;
 import me.foesio.foBounty.service.DiscordWebhookService;
 import me.foesio.foBounty.service.FoTeamsHookService;
 import me.foesio.foBounty.service.PlayerLookupService;
@@ -34,6 +37,7 @@ import me.foesio.foBounty.util.Style;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
@@ -133,7 +137,9 @@ public final class FoBounty extends JavaPlugin {
         FoTeamsHookService foTeamsHookService = new FoTeamsHookService(this);
         discordWebhookService = new DiscordWebhookService(this, oldSchemaVersion);
 
-        bountyService = new BountyService(this, settings, playerLookupService, foTeamsHookService, core.scheduler(), sounds);
+        CooldownService cooldownService = new CooldownService();
+        bountyService = new BountyService(this, settings, playerLookupService, foTeamsHookService,
+                core.scheduler(), sounds, cooldownService);
         bountyService.setEconomy(setupEconomy());
         try {
             bountyService.init();
@@ -143,7 +149,6 @@ public final class FoBounty extends JavaPlugin {
             return;
         }
 
-        CooldownService cooldownService = new CooldownService();
         guiManager = new GuiManager(this, settings, messages, bountyService, cooldownService,
                 core.textInputService(), searchInputs, core.inventoryCloseSuppressor(), core.scheduler(), editorSounds, guiSounds);
         publicGuis = PublicBountyGuis.create(this, guiManager);
@@ -192,10 +197,15 @@ public final class FoBounty extends JavaPlugin {
         ), this);
 
         registerPlaceholders();
+        Bukkit.getServicesManager().register(BountyApi.class,
+                new BountyApiImpl(this, settings, bountyService,
+                        new BountyNotifications(settings, messages, discordWebhookService)),
+                this, ServicePriority.Normal);
     }
 
     @Override
     public void onDisable() {
+        Bukkit.getServicesManager().unregisterAll(this);
         if (searchInputs != null) {
             searchInputs.close();
             searchInputs = null;

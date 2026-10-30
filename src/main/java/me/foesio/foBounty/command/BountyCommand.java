@@ -9,6 +9,7 @@ import me.foesio.foBounty.gui.GuiManager;
 import me.foesio.foBounty.model.BountyHistoryEntry;
 import me.foesio.foBounty.model.HistoryType;
 import me.foesio.foBounty.service.BountyService;
+import me.foesio.foBounty.service.BountyNotifications;
 import me.foesio.foBounty.service.DiscordWebhookService;
 import me.foesio.foBounty.service.PlayerLookupService;
 import me.foesio.foBounty.util.CooldownService;
@@ -31,7 +32,7 @@ public final class BountyCommand implements TabExecutor {
     private final PluginSettings settings;
     private final FoMessageService messages;
     private final BountyService bountyService;
-    private final DiscordWebhookService discordWebhookService;
+    private final BountyNotifications notifications;
     private final PlayerLookupService playerLookupService;
     private final GuiManager guiManager;
     private final CooldownService cooldownService;
@@ -50,7 +51,7 @@ public final class BountyCommand implements TabExecutor {
         this.settings = settings;
         this.messages = messages;
         this.bountyService = bountyService;
-        this.discordWebhookService = discordWebhookService;
+        this.notifications = new BountyNotifications(settings, messages, discordWebhookService);
         this.playerLookupService = playerLookupService;
         this.guiManager = guiManager;
         this.cooldownService = cooldownService;
@@ -130,11 +131,6 @@ public final class BountyCommand implements TabExecutor {
             playAddError(player);
             return true;
         }
-        if (cooldownService.isOnCooldown(player.getUniqueId(), "bounty-add", settings.getBountyAddCooldownMs())) {
-            adminSounds.updateError(player);
-            return true;
-        }
-
         BountyService.AddResult result = bountyService.addBounty(player, target, amount);
         switch (result.getStatus()) {
             case NO_ECONOMY -> {
@@ -145,7 +141,8 @@ public final class BountyCommand implements TabExecutor {
                 BountyMessages.send(messages, player, "not-enough-money", "not-enough-money");
                 playAddError(player);
             }
-            case FAILURE -> {
+            case COOLDOWN -> playAddError(player);
+            case FAILURE, CANCELLED -> {
                 BountyMessages.send(messages, player, "add-failed", "add-failed");
                 playAddError(player);
             }
@@ -155,17 +152,7 @@ public final class BountyCommand implements TabExecutor {
                 replacements.put("player", target.getName());
                 replacements.put("total", Style.formatMoney(result.getTotal()));
                 BountyMessages.send(messages, player, "add-success", "add-success", replacements);
-                if (settings.isBountySetAnnounceEnabled()
-                        && (settings.getBountySetAnnounceMinimumAmount() < 0
-                        || amount >= settings.getBountySetAnnounceMinimumAmount())) {
-                    Map<String, String> announce = new HashMap<>();
-                    announce.put("setter", player.getName());
-                    announce.put("target", target.getName());
-                    announce.put("amount", Style.formatMoney(amount));
-                    announce.put("total", Style.formatMoney(result.getTotal()));
-                    BountyMessages.broadcast(messages, "add-announce", announce);
-                }
-                discordWebhookService.sendBountyCreated(player.getName(), target.getName(), amount, result.getTotal());
+                notifications.placed(player.getName(), target.getName(), amount, result.getTotal());
             }
         }
         return true;

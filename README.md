@@ -72,6 +72,6 @@ Main config areas: `settings`, `bounty`, `announcements`, `anti-abuse`, `discord
 <details>
 <summary><strong>Developer API</strong></summary>
 
-This plugin does not expose a public developer API.
+FoBounty exposes a Bukkit service and bounty lifecycle events. See [public API source](src/main/java/me/foesio/foBounty/api) for consumer setup, examples, and event timing.
 
 </details>

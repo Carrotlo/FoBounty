@@ -52,6 +52,7 @@ public final class SQLiteStore {
                                 "setter_uuid TEXT NOT NULL," +
                                 "setter_name TEXT NOT NULL," +
                                 "amount INTEGER NOT NULL," +
+                                "source_type TEXT NOT NULL DEFAULT 'PLAYER'," +
                                 "PRIMARY KEY(target_uuid, setter_uuid)" +
                                 ")"
                 );
@@ -76,6 +77,21 @@ public final class SQLiteStore {
                                 ")"
                 );
                 statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_history_player_time ON bounty_history(player_uuid, occurred_at DESC)");
+            }
+            boolean contributionKindPresent = false;
+            try (Statement statement = connection.createStatement();
+                 ResultSet columns = statement.executeQuery("PRAGMA table_info(bounty_contributions)")) {
+                while (columns.next()) {
+                    if ("source_type".equalsIgnoreCase(columns.getString("name"))) {
+                        contributionKindPresent = true;
+                        break;
+                    }
+                }
+            }
+            if (!contributionKindPresent) {
+                try (Statement statement = connection.createStatement()) {
+                    statement.executeUpdate("ALTER TABLE bounty_contributions ADD COLUMN source_type TEXT NOT NULL DEFAULT 'PLAYER'");
+                }
             }
         }
     }
@@ -113,7 +129,7 @@ public final class SQLiteStore {
                 }
             }
             try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT target_uuid, setter_uuid, setter_name, amount FROM bounty_contributions"
+                    "SELECT target_uuid, setter_uuid, setter_name, amount, source_type FROM bounty_contributions"
             )) {
                 try (ResultSet rs = statement.executeQuery()) {
                     while (rs.next()) {
@@ -141,7 +157,9 @@ public final class SQLiteStore {
                         BountyContribution contribution = new BountyContribution(
                                 setterUuid,
                                 rs.getString("setter_name"),
-                                amount
+                                amount,
+                                "SPONSOR".equals(rs.getString("source_type"))
+                                        ? BountyContribution.Kind.SPONSOR : BountyContribution.Kind.PLAYER
                         );
                         bounty.getContributionMap().put(setterUuid, contribution);
                     }
@@ -355,14 +373,15 @@ public final class SQLiteStore {
 
     private void upsertContribution(Connection connection, UUID targetUuid, BountyContribution contribution) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO bounty_contributions(target_uuid, setter_uuid, setter_name, amount) " +
-                        "VALUES(?,?,?,?) ON CONFLICT(target_uuid, setter_uuid) DO UPDATE SET " +
-                        "setter_name=excluded.setter_name, amount=excluded.amount"
+                "INSERT INTO bounty_contributions(target_uuid, setter_uuid, setter_name, amount, source_type) " +
+                        "VALUES(?,?,?,?,?) ON CONFLICT(target_uuid, setter_uuid) DO UPDATE SET " +
+                        "setter_name=excluded.setter_name, amount=excluded.amount, source_type=excluded.source_type"
         )) {
             statement.setString(1, targetUuid.toString());
             statement.setString(2, contribution.getSetterUuid().toString());
             statement.setString(3, contribution.getSetterName());
             statement.setLong(4, contribution.getAmount());
+            statement.setString(5, contribution.getKind().name());
             statement.executeUpdate();
         }
     }

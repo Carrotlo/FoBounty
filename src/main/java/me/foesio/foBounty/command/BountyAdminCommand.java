@@ -115,7 +115,8 @@ public final class BountyAdminCommand implements TabExecutor {
                     playAdminError(sender);
                     return true;
                 }
-                BountyService.RemoveResult result = bountyService.removeBounty(target.getUniqueId());
+                BountyService.RemoveResult result = bountyService.removeBounty(target.getUniqueId(),
+                        sender instanceof Player admin ? admin.getUniqueId() : null, sender.getName());
                 switch (result.getStatus()) {
                     case REMOVED -> {
                         BountyMessages.send(messages, sender, "admin-remove-success", "admin-remove-success", Map.of("player", target.getName()));

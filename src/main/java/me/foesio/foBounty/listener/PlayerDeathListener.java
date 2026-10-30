@@ -169,6 +169,13 @@ public final class PlayerDeathListener implements Listener {
             return;
         }
 
+        if (result.getStatus() == BountyService.ClaimStatus.BLOCKED_EXTERNAL && killer != null) {
+            String key = messages.config().isString("claim-blocked-custom") ? "claim-blocked-custom" : "claim-failed";
+            BountyMessages.send(messages, killer, key, key);
+            sounds.play(killer, "bounty.error");
+            return;
+        }
+
         if (result.getStatus() == BountyService.ClaimStatus.FAILURE) {
             if (killer != null) {
                 BountyMessages.send(messages, killer, "claim-failed", "claim-failed");

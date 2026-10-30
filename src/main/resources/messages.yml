@@ -47,6 +47,7 @@ claim-failed: "{prefix}:redstone: {bad}Could not update this bounty right now. C
 natural-lost: "{prefix}{bad}You lost a bounty worth {theme}${amount}{bad} due to natural death."
 claim-blocked-alt: "{prefix}{bad}Claim blocked by anti-abuse IP/subnet rule."
 claim-blocked-team: "{prefix}{bad}Claim blocked because both players are in the same team."
+claim-blocked-custom: "{prefix}{bad}This bounty claim was blocked by another plugin."
 editor-saved: "{prefix}:emerald: {good}Updated {theme}{setting}{good} to {theme}{value}{good}."
 editor-invalid: "{prefix}:redstone: {bad}Invalid value for {theme}{setting}{bad}."
 
